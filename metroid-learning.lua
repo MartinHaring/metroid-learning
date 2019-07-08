@@ -11,26 +11,6 @@ Outputs = #config.ButtonNames
 -- NEAT Functions WIP
 --##########################################################
 
-
-
---##########################################################
--- Display Checks WIP
---##########################################################
-
-
-
---##########################################################
--- File Management WIP
---##########################################################
-
-
-
---##########################################################
--- Reinforcement Learning WIP
---##########################################################
-
-
-
 function newInnovation()
 	pool.innovation = pool.innovation + 1
 	return pool.innovation
@@ -130,15 +110,58 @@ function copyGene(gene)
 	return gene2
 end
 
+function containsLink(genes, link)
+	for i=1,#genes do
+		local gene = genes[i]
+		if gene.into == link.into and gene.out == link.out then
+			return true
+		end
+	end
+end
+
 function newNeuron()
 	local neuron = {}
 	neuron.incoming = {}
 	neuron.value = 0.0
-	--neuron.dw = 1
 	return neuron
 end
 
-function generateNetwork(genome)
+function randomNeuron(genes, nonInput)
+	local neurons = {}
+	if not nonInput then
+		for i=1,Inputs do
+			neurons[i] = true
+		end
+	end
+	for o=1,Outputs do
+		neurons[config.NeatConfig.MaxNodes+o] = true
+	end
+	for i=1,#genes do
+		if (not nonInput) or genes[i].into > Inputs then
+			neurons[genes[i].into] = true
+		end
+		if (not nonInput) or genes[i].out > Inputs then
+			neurons[genes[i].out] = true
+		end
+	end
+
+	local count = 0
+	for _,_ in pairs(neurons) do
+		count = count + 1
+	end
+	local n = math.random(1, count)
+	
+	for k,v in pairs(neurons) do
+		n = n-1
+		if n == 0 then
+			return k
+		end
+	end
+	
+	return 0
+end
+
+function newNetwork(genome)
 	local network = {}
 	network.neurons = {}
 	
@@ -170,6 +193,27 @@ function generateNetwork(genome)
 	genome.network = network
 end
 
+function weights(genes1, genes2)
+	local i2 = {}
+	for i = 1,#genes2 do
+		local gene = genes2[i]
+		i2[gene.innovation] = gene
+	end
+
+	local sum = 0
+	local coincident = 0
+	for i = 1,#genes1 do
+		local gene = genes1[i]
+		if i2[gene.innovation] ~= nil then
+			local gene2 = i2[gene.innovation]
+			sum = sum + math.abs(gene.weight - gene2.weight)
+			coincident = coincident + 1
+		end
+	end
+	
+	return sum / coincident
+end
+
 function evaluateNetwork(network, inputs, inputDeltas)
 	table.insert(inputs, 1)
 	table.insert(inputDeltas,99)
@@ -177,11 +221,9 @@ function evaluateNetwork(network, inputs, inputDeltas)
 		console.writeline("Incorrect number of neural network inputs.")
 		return {}
 	end
-	
 
 	for i=1,Inputs do
 		network.neurons[i].value = inputs[i] * inputDeltas[i]
-		--network.neurons[i].value = inputs[i]
 	end
 	
 	for _,neuron in pairs(network.neurons) do
@@ -243,50 +285,6 @@ function crossover(g1, g2)
 	end
 	
 	return child
-end
-
-function randomNeuron(genes, nonInput)
-	local neurons = {}
-	if not nonInput then
-		for i=1,Inputs do
-			neurons[i] = true
-		end
-	end
-	for o=1,Outputs do
-		neurons[config.NeatConfig.MaxNodes+o] = true
-	end
-	for i=1,#genes do
-		if (not nonInput) or genes[i].into > Inputs then
-			neurons[genes[i].into] = true
-		end
-		if (not nonInput) or genes[i].out > Inputs then
-			neurons[genes[i].out] = true
-		end
-	end
-
-	local count = 0
-	for _,_ in pairs(neurons) do
-		count = count + 1
-	end
-	local n = math.random(1, count)
-	
-	for k,v in pairs(neurons) do
-		n = n-1
-		if n == 0 then
-			return k
-		end
-	end
-	
-	return 0
-end
-
-function containsLink(genes, link)
-	for i=1,#genes do
-		local gene = genes[i]
-		if gene.into == link.into and gene.out == link.out then
-			return true
-		end
-	end
 end
 
 function pointMutate(genome)
@@ -463,27 +461,24 @@ function disjoint(genes1, genes2)
 	return disjointGenes / n
 end
 
-function weights(genes1, genes2)
-	local i2 = {}
-	for i = 1,#genes2 do
-		local gene = genes2[i]
-		i2[gene.innovation] = gene
-	end
+--##########################################################
+-- Display Checks WIP
+--##########################################################
 
-	local sum = 0
-	local coincident = 0
-	for i = 1,#genes1 do
-		local gene = genes1[i]
-		if i2[gene.innovation] ~= nil then
-			local gene2 = i2[gene.innovation]
-			sum = sum + math.abs(gene.weight - gene2.weight)
-			coincident = coincident + 1
-		end
-	end
-	
-	return sum / coincident
-end
-	
+
+
+--##########################################################
+-- File Management WIP
+--##########################################################
+
+
+
+--##########################################################
+-- Reinforcement Learning WIP
+--##########################################################
+
+
+
 function sameSpecies(genome1, genome2)
 	local dd = config.NeatConfig.DeltaDisjoint*disjoint(genome1.genes, genome2.genes)
 	local dw = config.NeatConfig.DeltaWeights*weights(genome1.genes, genome2.genes) 
@@ -689,7 +684,7 @@ function initializeRun()
 	powerUpBefore = game.getPowerup()
 	local species = pool.species[pool.currentSpecies]
 	local genome = species.genomes[pool.currentGenome]
-	generateNetwork(genome)
+	newNetwork(genome)
 	evaluateCurrent()
 end
 

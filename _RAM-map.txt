@@ -1052,8 +1052,8 @@ VRAM during main gameplay (In byte addresses, not word addresses)
 $0000 - $47FF     Area graphics (4 bit)
 $4800 - $4FFF     Layer 2 tilemap? Sometimes seems to be unused
 $5000 - $7BFF     CRE graphics (4 bit)
-    $6000 - $6FFF     Layer 1 tilemap on pause screen (2x1 wide)
-    $7000 - $77FF     Layer 2 tilemap on pause screen (1x1)
+$6000 - $6FFF     Layer 1 tilemap on pause screen (2x1 wide)
+$7000 - $77FF     Layer 2 tilemap on pause screen (1x1)
 $7C00 - $7FFF     Misc. graphics? (4 bit, Contains beam item tiles)
 $8000 - $8FFF     Layer 3 graphics. (2 bit. Lotta available space scattered around.)
 $9000 - $9FFF     Sometimes used as Layer 2 tilemap (like with Phantoon). Usually unused?
