@@ -2,7 +2,7 @@ local _M = {}
 
 _M.Sprites = {}
 
--- Neutral stuff; does not affect score (needs to be sorted)
+-- Neutral stuff; does not affect score (sorted)
 _M.NeutralSprites = {
 				0xB6D3,		-- Mapping Station
 				0xB6DF,		-- Energy Refill Station
@@ -55,7 +55,7 @@ _M.NeutralSprites = {
 				0xDF85		-- Broken Diagonal Electrical Outlet, pointing top left
 			}
 
--- Good stuff; affects the score positively (needs to be sorted)
+-- Good stuff; affects the score positively (sorted)
 _M.GoodSprites = {
 				0xEED7,		-- Energy item
 				0xEEDB,		-- Missile Item
@@ -122,7 +122,7 @@ _M.GoodSprites = {
 				0xEFCF		-- Item hidden in scenery
 			}
 
--- Bad stuff; affects the score negatively (needs to be sorted)
+-- Bad stuff; affects the score negatively (sorted)
 _M.BadSprites = {
 				0xB70B,		-- Elevator Base
 				0xCEBF,		-- BOYON (slime alike enemy)

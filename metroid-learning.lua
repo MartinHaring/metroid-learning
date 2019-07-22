@@ -8,15 +8,11 @@ Outputs = #config.ButtonNames
 
 
 --##########################################################
--- NEAT Functions WIP
+-- NEAT Functions
 --##########################################################
 
-function initializeRun()										-- rework after config.lua			!!!
+function initializeRun()
 	savestate.load(config.NeatConfig.Filename);
-	
-	if config.StartPowerup ~= NIL then
-		game.writePowerup(config.StartPowerup)
-	end
 	
 	rightmost = 0
 	pool.currentFrame = 0
@@ -31,8 +27,6 @@ function initializeRun()										-- rework after config.lua			!!!
 	
 	checkSamusCollision = true
 	samusHitCounter = 0
-	powerUpCounter = 0
-	powerUpBefore = game.getPowerup()
 	
 	local species = pool.species[pool.currentSpecies]
 	local genome = species.genomes[pool.currentGenome]
@@ -487,7 +481,8 @@ function fitnessAlreadyMeasured()
 end
 
 function newGeneration()
-	cullSpecies(false) -- Cull the bottom half of each species
+	-- Cull the bottom half of each species
+	cullSpecies(false)
 	rankSpecies()
 	removeStaleSpecies()
 	rankSpecies()
@@ -511,7 +506,8 @@ function newGeneration()
 		end
 	end
 	
-	cullSpecies(true) -- Cull all but the top member of each species
+	-- Cull all but the top member of each species
+	cullSpecies(true)
 	
 	while #children + #pool.species < config.NeatConfig.Population do
 		local species = pool.species[math.random(1, #pool.species)]
@@ -744,7 +740,7 @@ end
 
 
 --##########################################################
--- Display Checks WIP
+-- Display Checks
 --##########################################################
 
 function displayGenome(genome)
@@ -917,14 +913,12 @@ MeasuredLabel = forms.label(form, "Measured: " .. "", 330, 5)
 FitnessLabel = forms.label(form, "Fitness: " .. "", 5, 30)
 MaxLabel = forms.label(form, "Max: " .. "", 130, 30)
 
-HealthLabel = forms.label(form, "Health: " .. "", 130, 80, 90, 14)
---CoinsLabel = forms.label(form, "Coins: " .. "", 5, 65)
-MissilesLabel = forms.label(form, "Missiles: " .. "", 130, 65, 90, 14)
--- SuperMissilesLabel = forms.label(form, "Super Missiles: " .. "", 130, 65, 90, 14)
--- BombLabel = forms.label(form, "Power Bombs: " .. "", 130, 65, 90, 14)
--- TankLabel = forms.label(form, "Reserve Tanks: " .. "", 130, 65, 90, 14)
-DmgLabel = forms.label(form, "Damage: " .. "", 230, 65, 110, 14)
-PowerUpLabel = forms.label(form, "PowerUp: " .. "", 230, 80, 110, 14)
+HealthLabel = forms.label(form, "Health: " .. "", 5, 65)
+TankLabel = forms.label(form, "Reserve Tanks: " .. "", 130, 65, 90, 14)
+MissilesLabel = forms.label(form, "Missiles: " .. "", 130, 80, 90, 14)
+SuperMissilesLabel = forms.label(form, "Super Missiles: " .. "", 230, 65, 90, 14)
+BombLabel = forms.label(form, "Power Bombs: " .. "", 230, 80, 110, 14)
+DmgLabel = forms.label(form, "Damage: " .. "", 330, 65, 110, 14)
 
 startButton = forms.button(form, "Start", flipState, 155, 102)
 restartButton = forms.button(form, "Restart", initializePool, 155, 102)
@@ -1050,7 +1044,7 @@ function savePool()
 end
 
 function loadPool()
-	filename = forms.openfile("DP1.state.pool",config.PoolDir) 				-- change "DP1.state.pool" later			!!!
+	filename = forms.openfile("default.state.pool",config.PoolDir)
 	forms.settext(saveLoadFile, filename)
 	loadFile(filename)
 end
@@ -1096,7 +1090,7 @@ writeFile(config.PoolDir.."temp.pool")
 
 
 --##########################################################
--- Reinforcement Learning WIP
+-- Reinforcement Learning
 --##########################################################
 
 if pool == nil then
@@ -1136,47 +1130,37 @@ while true do
 		checkSamusCollision = true
 	end
 	
-	powerUp = game.getPowerup()
-	if powerUp > 0 then
-		if powerUp ~= powerUpBefore then
-			powerUpCounter = powerUpCounter+1
-			powerUpBefore = powerUp
-		end
-	end
-	
 	Health = game.getHealth()
 
 	timeout = timeout - 1
 	
 	local timeoutBonus = pool.currentFrame / 4
 	if timeout + timeoutBonus <= 0 then
-	
---		local coins = game.getCoins() - startCoins
---		local score = game.getMissiles() - startMissiles
---		local bombs = game.getBombs() - startBombs
---		local tanks = game.getTanks() - startTanks
+		local missiles = game.getMissiles() - startMissiles
+		local superMissiles = game.getSuperMissiles() - startSuperMissiles
+		local bombs = game.getBombs() - startBombs
+		local tanks = game.getTanks() - startTanks
 		
-		--console.writeline("Coins: " .. coins .. " score: " .. score)
+		console.writeline("Missiles: " .. missiles .. " Super Missiles: " .. superMissiles .. " Power Bombs: " .. bombs .. " Energy Tanks: " .. tanks)
 
---		local coinScoreFitness = (coins * 50) + (score * 0.2)
---		if (coins + score) > 0 then 
---			console.writeline("Coins and Score added " .. coinScoreFitness .. " fitness")
---		end
+		local pickupFitness = (missiles * 10) + (superMissiles * 100) + (bombs * 100) + (tanks * 1000)
+		if (missiles + superMissiles + bombs + tanks) > 0 then 
+			console.writeline("Collected Pickups added " .. pickupFitness .. " fitness")
+		end
 		
 		local hitPenalty = samusHitCounter * 100
-		local powerUpBonus = powerUpCounter * 100
 	
---		local fitness = coinScoreFitness - hitPenalty + powerUpBonus + rightmost - pool.currentFrame / 2
+		local fitness = pickupFitness - hitPenalty + rightmost - pool.currentFrame / 2
 
 		if startHealth < Health then
 			local ExtraHealthBonus = (Health - startHealth)*1000
 			fitness = fitness + ExtraHealthBonus
-			console.writeline("ExtraHealthBonus added " .. ExtraHealthBonus)
+			console.writeline("Extra Health added " .. ExtraHealthBonus .. " fitness")
 		end
 
 		if rightmost > 4816 then
-			fitness = fitness + 1000
-			console.writeline("!!!!!!Beat level!!!!!!!")
+			fitness = fitness + 10000
+			console.writeline("!!!!!!Reached Ridley!!!!!!!")
 		end
 		if fitness == 0 then
 			fitness = -1
@@ -1185,7 +1169,6 @@ while true do
 		
 		if fitness > pool.maxFitness then
 			pool.maxFitness = fitness
-			--writeFile("backup." .. pool.generation .. "." .. forms.gettext(saveLoadFile))
 			writeFile(forms.gettext(saveLoadFile) .. ".gen" .. pool.generation .. ".pool")
 		end
 		
@@ -1217,13 +1200,11 @@ while true do
 	forms.settext(MaxLabel, "Max: " .. math.floor(pool.maxFitness))
 	forms.settext(MeasuredLabel, "Measured: " .. math.floor(measured/total*100) .. "%")
 	forms.settext(HealthLabel, "Health: " .. Health)
---	forms.settext(CoinsLabel, "Coins: " .. (game.getCoins() - startCoins))
 	forms.settext(MissilesLabel, "Missiles: " .. (game.getMissiles() - startMissiles))
 	forms.settext(SuperMissilesLabel, "Super Missiles: " .. (game.getSuperMissiles() - startSuperMissiles))
 	forms.settext(BombsLabel, "Power Bombs: " .. (game.getBombs() - startBombs))
 	forms.settext(TanksLabel, "Reserve Tanks: " .. (game.getTanks() - startTanks))
 	forms.settext(DmgLabel, "Damage: " .. samusHitCounter)
-	forms.settext(PowerUpLabel, "PowerUp: " .. powerUpCounter)
 
 	pool.currentFrame = pool.currentFrame + 1
 	

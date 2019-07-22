@@ -3,6 +3,7 @@ spritelist = require "spritelist"
 
 local _M = {}
 
+
 --##########################################################
 -- Player data
 --##########################################################
@@ -20,7 +21,7 @@ function _M.getMissiles()
 end
 
 -- 7E:09CA - 7E:09CB    Samus's super missiles
-function _M.getMissiles()
+function _M.getSuperMissiles()
 	local superMissiles = memory.read_s16_le(0x09CA)
 	return superMissiles
 end
