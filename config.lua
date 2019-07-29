@@ -2,8 +2,9 @@ local _M = {}
 
 _M.BizhawkDir = "C:/bizhawk/"
 
-_M.StateDir = _M.BizhawkDir .. "Lua/SNES/metroid-learning/state/"
-_M.PoolDir = _M.BizhawkDir .. "Lua/SNES/metroid-learning/pool/"
+-- For future organizational purposes
+-- _M.StateDir = _M.BizhawkDir .. "Lua/SNES/metroid-learning/state/"
+-- _M.PoolDir = _M.BizhawkDir .. "Lua/SNES/metroid-learning/pool/"
 
 _M.NeatConfig = {
 	Filename = "default.State",

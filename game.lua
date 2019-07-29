@@ -87,9 +87,10 @@ end
 function _M.getSprites()
 	local sprites = {}
 	
-	spritex = memory.read_s16_le(1C29)
-	spritey = memory.read_s16_le(1C2B)
-			
+	spritex = memory.read_s16_le(0x1C29)
+	spritey = memory.read_s16_le(0x1C2B)
+		
+	-- ["good"] is missing, might be necessary. indicates whether the sprite in the list is good or not.
 	sprites[#sprites+1] = {["x"]=spritex, ["y"]=spritey}
 		
 	return sprites
@@ -104,9 +105,10 @@ end
 function _M.getExtendedSprites()
 	local extended = {}
 	
-	spritex = memory.readbyterange(0x1A4B, 36)
-	spritey = memory.readbyterange(0x1A93, 36)
+	spritex = memory.read_s32_le(0x1A4B)
+	spritey = memory.read_s32_le(0x1A93)
 	
+	-- ["good"] is missing, might be necessary. indicates whether the sprite in the list is good or not.
 	extended[#extended+1] = {["x"]=spritex, ["y"]=spritey}
 		
 	return extended

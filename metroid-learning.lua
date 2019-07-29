@@ -7,6 +7,8 @@ Inputs = config.InputSize+1
 Outputs = #config.ButtonNames
 
 
+
+
 --##########################################################
 -- NEAT Functions
 --##########################################################
@@ -781,7 +783,7 @@ function displayGenome(genome)
 			color = 0xFF000000
 		end
 		
-		forms.drawText(netPicture,223, 24+8*o, config.ButtonNames[o], color, 9)
+		forms.drawText(netPicture, 263, 24+8*o, config.ButtonNames[o], color, 9)
 	end
 	
 	for n,neuron in pairs(network.neurons) do
@@ -904,6 +906,10 @@ form = forms.newform(500, 500, "Metroid-Learning")
 netPicture = forms.pictureBox(form, 5, 250,470, 200)
 
 event.onexit(onExit)
+
+if pool == nil then
+	initializePool()
+end
 
 GenerationLabel = forms.label(form, "Generation: " .. pool.generation, 5, 5)
 SpeciesLabel = forms.label(form, "Species: " .. pool.currentSpecies, 130, 5)
@@ -1044,7 +1050,7 @@ function savePool()
 end
 
 function loadPool()
-	filename = forms.openfile("default.state.pool",config.PoolDir)
+	filename = forms.openfile("default.State.pool", config.PoolDir)
 	forms.settext(saveLoadFile, filename)
 	loadFile(filename)
 end
@@ -1093,10 +1099,6 @@ writeFile(config.PoolDir.."temp.pool")
 -- Reinforcement Learning
 --##########################################################
 
-if pool == nil then
-	initializePool()
-end
-
 while true do	
 	if config.Running == true then
 
@@ -1117,7 +1119,7 @@ while true do
 		timeout = config.NeatConfig.TimeoutConstant
 	end
 	
-	local hitTimer = game.getMarioHitTimer()
+	local hitTimer = game.getSamusHitTimer()
 	if checkSamusCollision == true then
 		if hitTimer > 0 then
 			samusHitCounter = samusHitCounter + 1
