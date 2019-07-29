@@ -40,7 +40,7 @@ end
 
 
 --##########################################################
--- Graphic data WIP
+-- Graphic data
 --##########################################################
 
 -- 7E:0AF6 - 7E:0AF7    Samus's X position in pixels
@@ -82,84 +82,35 @@ function _M.getTile(dx, dy)
 	return memory.readbyte(0x0002 + math.floor(x/0x10)*0x1B0 + y*0x10 + x%0x10)
 end
 
--- 7E:00D0 - 7E:02AF    Table of entries to update graphics, 7 bytes: Size (2 bytes), source address (3 bytes), VRAM target (2 bytes) (Unsure of size)
--- 7E:0340 - 7E:035B    Table of entries to read from graphics, 9 bytes: VRAM target(cannot be 0, 2 bytes), and all other DMA data (7 bytes) (Unsure of size)
--- 7E:1C37 - 7E:1C86    PLM header table
--- 7E:1F25 - 7E:1F30    Graphic pointer
 -- 7E:1C29 - 7E:1C2A    Calculated PLM's X position
 -- 7E:1C2B - 7E:1C2C    Calculated PLM's Y position
 function _M.getSprites()
 	local sprites = {}
-	for slot=0,11 do
-		local status = memory.readbyte(0x1F25+slot)
-		if status ~= 0 then
-			spritex = memory.readbyte(0xE4+slot) + memory.readbyte(0x14E0+slot)*256
-			spritey = memory.readbyte(0xD8+slot) + memory.readbyte(0x14D4+slot)*256
+	
+	spritex = memory.read_s16_le(1C29)
+	spritey = memory.read_s16_le(1C2B)
 			
-			-- $7E009E	12 bytes	Sprites	Sprite number, or Acts Like setting for custom sprites.
-			sprites[#sprites+1] = {["x"]=spritex, ["y"]=spritey, ["good"] = spritelist.Sprites[memory.readbyte(0x009e + slot) + 1]}
-		end
-	end		
+	sprites[#sprites+1] = {["x"]=spritex, ["y"]=spritey}
 		
 	return sprites
 end
 
---		;Atmospheric graphics are footsteps, water splash, air bubbles, etc.
--- 7E:0AD4 - 7E:0ADB    Atmospheric graphics animation timers (1-4). 8000+ means 'don't run related code during timer'
 -- 7E:0ADC - 7E:0AE3    Atmospheric graphics X position (1-4)
 -- 7E:0AE4 - 7E:0AEB    Atmospheric graphics Y position (1-4)
--- 7E:0AEC - 7E:0AF3    Atmospheric graphics type/animation frame number (1-4)
---		;01XX = water splash, 04XX = smoke moving right, 05XX = bubbles, 06XX and 07XX = smoke moving up
+-- 7E:0B64 - 7E:0B6D    Projectile X position in pixels (related to Samus)
+-- 7E:0B78 - 7E:0B81    Projectile Y position in pixels (related to Samus)
+-- 7E:1A4B - 7E:1A6E    X position of projectile, in pixels (related to Enemies)
+-- 7E:1A93 - 7E:1AB6    Y position of projectile, in pixels (related to Enemies)
 function _M.getExtendedSprites()
 	local extended = {}
-	for slot=0,11 do
-		-- $7E170B	10 bytes	Sprites	Extended sprite number. A list of possible values can be found here. Last two bytes reserved for fireballs.
-		local number = memory.readbyte(0x170B+slot)
-		if number ~= 0 then
-			spritex = memory.readbyte(0x171F+slot) + memory.readbyte(0x1733+slot)*256
-			spritey = memory.readbyte(0x1715+slot) + memory.readbyte(0x1729+slot)*256
-			extended[#extended+1] = {["x"]=spritex, ["y"]=spritey, ["good"]  =  spritelist.extSprites[memory.readbyte(0x170B + slot) + 1]}
-		end
-	end		
+	
+	spritex = memory.readbyterange(0x1A4B, 36)
+	spritey = memory.readbyterange(0x1A93, 36)
+	
+	extended[#extended+1] = {["x"]=spritex, ["y"]=spritey}
 		
 	return extended
 end
-
---[[
-function _M.getSprites()
-	local sprites = {}
-	for slot=0,11 do
-		-- $7E14C8	12 bytes	Table containing 12 sprite status. The '0' status is used for non-existent sprites and should therefore be excluded. 
-		local status = memory.readbyte(0x14C8+slot)
-		if status ~= 0 then
-			-- $7E00E4	Sprite X position, low byte				$7E14E0	Sprite X position, high byte
-			-- $7E00D8	Sprite Y position, low byte				$7E14D4 Sprite Y position, high byte
-			spritex = memory.readbyte(0xE4+slot) + memory.readbyte(0x14E0+slot)*256
-			spritey = memory.readbyte(0xD8+slot) + memory.readbyte(0x14D4+slot)*256
-			
-			-- $7E009E	12 bytes	Sprites	Sprite number, or Acts Like setting for custom sprites.
-			sprites[#sprites+1] = {["x"]=spritex, ["y"]=spritey, ["good"] = spritelist.Sprites[memory.readbyte(0x009e + slot) + 1]}
-		end
-	end		
-		
-	return sprites
-end
-
-function _M.getExtendedSprites()
-	local extended = {}
-	for slot=0,11 do
-		-- $7E170B	10 bytes	Sprites	Extended sprite number. A list of possible values can be found here. Last two bytes reserved for fireballs.
-		local number = memory.readbyte(0x170B+slot)
-		if number ~= 0 then
-			spritex = memory.readbyte(0x171F+slot) + memory.readbyte(0x1733+slot)*256
-			spritey = memory.readbyte(0x1715+slot) + memory.readbyte(0x1729+slot)*256
-			extended[#extended+1] = {["x"]=spritex, ["y"]=spritey, ["good"]  =  spritelist.extSprites[memory.readbyte(0x170B + slot) + 1]}
-		end
-	end		
-		
-	return extended
-end
---]]
 
 
 --##########################################################

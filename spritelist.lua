@@ -309,7 +309,7 @@ end
 
 _M.extSprites = {}
 
--- Stuff that spawns but does not affect score
+-- Stuff that spawns but does not affect score (projectiles should be added here, too)
 _M.ExtNeutralSprites = {
     0xB63B,		-- Continuation PLM right
 	0xB63F,		-- Continuation PLM left
