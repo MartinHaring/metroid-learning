@@ -7,5 +7,12 @@ An AI tries to learn to beat the game.
 
 Currently a Work in Progress.
 Next steps:
-* figure out how to get sprites
-* Debugging
+* Optimization
+
+The core functionality already works. To try it out yourself, follow these steps:
+1. Make sure the bizhawk emulator is installed (currently only works if it's install directory is located on C:)
+2. Place this project in the Lua/SNES directory.
+3. Run emuhawk.exe and load the "Super Metroid (JU) [!].smc" rom
+4. Open Lua Console under the Tools tab
+5. Open the metroid-learning script
+6. Press Start

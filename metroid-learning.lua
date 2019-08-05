@@ -6,35 +6,10 @@ mathFunctions = require "mathFunctions"
 Inputs = config.InputSize+1
 Outputs = #config.ButtonNames
 
+form = forms.newform(500, 500, "Metroid-Learning")
+netPicture = forms.pictureBox(form, 5, 250,470, 200)
 
-
-
---##########################################################
--- NEAT Functions
---##########################################################
-
-function initializeRun()
-	savestate.load(config.NeatConfig.Filename);
-	
-	rightmost = 0
-	pool.currentFrame = 0
-	timeout = config.NeatConfig.TimeoutConstant
-	game.clearJoypad()
-	
-	startHealth = game.getHealth()
-	startMissiles = game.getMissiles()
-	startSuperMissiles = game.getSuperMissiles()
-	startBombs = game.getBombs()
-	startTanks = game.getTanks()
-	
-	checkSamusCollision = true
-	samusHitCounter = 0
-	
-	local species = pool.species[pool.currentSpecies]
-	local genome = species.genomes[pool.currentGenome]
-	newNetwork(genome)
-	evaluateCurrent()
-end
+event.onexit(onExit)
 
 function newPool()
 	local pool = {}
@@ -48,16 +23,259 @@ function newPool()
 	
 	return pool
 end
-	
-function initializePool()
-	pool = newPool()
 
-	for i=1,config.NeatConfig.Population do
-		basic = basicGenome()
-		addToSpecies(basic)
+function newGenome()
+	local genome = {}
+	genome.genes = {}
+	genome.fitness = 0
+	genome.adjustedFitness = 0
+	genome.network = {}
+	genome.maxneuron = 0
+	genome.globalRank = 0
+	
+	genome.mutationRates = {}
+	genome.mutationRates["connections"] = config.NeatConfig.MutateConnectionsChance
+	genome.mutationRates["link"] = config.NeatConfig.LinkMutationChance
+	genome.mutationRates["bias"] = config.NeatConfig.BiasMutationChance
+	genome.mutationRates["node"] = config.NeatConfig.NodeMutationChance
+	genome.mutationRates["enable"] = config.NeatConfig.EnableMutationChance
+	genome.mutationRates["disable"] = config.NeatConfig.DisableMutationChance
+	genome.mutationRates["step"] = config.NeatConfig.StepSize
+	
+	return genome
+end
+
+function randomNeuron(genes, nonInput)
+	local neurons = {}
+	
+	if not nonInput then
+		for i=1,Inputs do
+			neurons[i] = true
+		end
+	end
+	
+	for o=1,Outputs do
+		neurons[config.NeatConfig.MaxNodes+o] = true
+	end
+	
+	for i=1,#genes do
+		if (not nonInput) or genes[i].into > Inputs then
+			neurons[genes[i].into] = true
+		end
+	
+		if (not nonInput) or genes[i].out > Inputs then
+			neurons[genes[i].out] = true
+		end
 	end
 
-	initializeRun()
+	local count = 0
+	for _,_ in pairs(neurons) do
+		count = count + 1
+	end
+	
+	local n = math.random(1, count)
+	for k,v in pairs(neurons) do
+		n = n-1
+		if n == 0 then
+			return k
+		end
+	end
+	
+	return 0
+end
+
+function newGene()
+	local gene = {}
+	gene.into = 0
+	gene.out = 0
+	gene.weight = 0.0
+	gene.enabled = true
+	gene.innovation = 0
+	
+	return gene
+end
+
+function containsLink(genes, link)
+	for i=1,#genes do
+		local gene = genes[i]
+		
+		if gene.into == link.into and gene.out == link.out then
+			return true
+		end
+	end
+end
+
+function newInnovation()
+	pool.innovation = pool.innovation + 1
+	
+	return pool.innovation
+end
+
+function linkMutate(genome, forceBias)
+	local neuron1 = randomNeuron(genome.genes, false)
+	local neuron2 = randomNeuron(genome.genes, true)
+	local newLink = newGene()
+	
+	if neuron1 <= Inputs and neuron2 <= Inputs then
+		--Both input nodes
+		return
+	end
+	
+	if neuron2 <= Inputs then
+		-- Swap output and input
+		local temp = neuron1
+		neuron1 = neuron2
+		neuron2 = temp
+	end
+
+	newLink.into = neuron1
+	newLink.out = neuron2
+	
+	if forceBias then
+		newLink.into = Inputs
+	end
+	
+	if containsLink(genome.genes, newLink) then
+		return
+	end
+	
+	newLink.innovation = newInnovation()
+	newLink.weight = math.random()*4-2
+	
+	table.insert(genome.genes, newLink)
+end
+
+function pointMutate(genome)
+	local step = genome.mutationRates["step"]
+	
+	for i=1,#genome.genes do
+		local gene = genome.genes[i]
+		if math.random() < config.NeatConfig.PerturbChance then
+			gene.weight = gene.weight + math.random() * step*2 - step
+		else
+			gene.weight = math.random()*4-2
+		end
+	end
+end
+
+function copyGene(gene)
+	local gene2 = newGene()
+	gene2.into = gene.into
+	gene2.out = gene.out
+	gene2.weight = gene.weight
+	gene2.enabled = gene.enabled
+	gene2.innovation = gene.innovation
+	
+	return gene2
+end
+
+function nodeMutate(genome)
+	if #genome.genes == 0 then
+		return
+	end
+
+	genome.maxneuron = genome.maxneuron + 1
+
+	local gene = genome.genes[math.random(1,#genome.genes)]
+	if not gene.enabled then
+		return
+	end
+	
+	gene.enabled = false
+	
+	local gene1 = copyGene(gene)
+	gene1.out = genome.maxneuron
+	gene1.weight = 1.0
+	gene1.innovation = newInnovation()
+	gene1.enabled = true
+	table.insert(genome.genes, gene1)
+	
+	local gene2 = copyGene(gene)
+	gene2.into = genome.maxneuron
+	gene2.innovation = newInnovation()
+	gene2.enabled = true
+	table.insert(genome.genes, gene2)
+end
+
+function enableDisableMutate(genome, enable)
+	local candidates = {}
+	
+	for _,gene in pairs(genome.genes) do
+		if gene.enabled == not enable then
+			table.insert(candidates, gene)
+		end
+	end
+	
+	if #candidates == 0 then
+		return
+	end
+	
+	local gene = candidates[math.random(1,#candidates)]
+	gene.enabled = not gene.enabled
+end
+
+function mutate(genome)
+	for mutation,rate in pairs(genome.mutationRates) do
+		if math.random(1,2) == 1 then
+			genome.mutationRates[mutation] = 0.95*rate
+		else
+			genome.mutationRates[mutation] = 1.05263*rate
+		end
+	end
+
+	if math.random() < genome.mutationRates["connections"] then
+		pointMutate(genome)
+	end
+	
+	local p = genome.mutationRates["link"]
+	while p > 0 do
+		if math.random() < p then
+			linkMutate(genome, false)
+		end
+		p = p - 1
+	end
+
+	p = genome.mutationRates["bias"]
+	while p > 0 do
+		if math.random() < p then
+			linkMutate(genome, true)
+		end
+		p = p - 1
+	end
+	
+	p = genome.mutationRates["node"]
+	while p > 0 do
+		if math.random() < p then
+			nodeMutate(genome)
+		end
+		p = p - 1
+	end
+	
+	p = genome.mutationRates["enable"]
+	while p > 0 do
+		if math.random() < p then
+			enableDisableMutate(genome, true)
+		end
+		p = p - 1
+	end
+
+	p = genome.mutationRates["disable"]
+	while p > 0 do
+		if math.random() < p then
+			enableDisableMutate(genome, false)
+		end
+		p = p - 1
+	end
+end
+
+function basicGenome()
+	local genome = newGenome()
+	local innovation = 1
+
+	genome.maxneuron = Inputs
+	mutate(genome)
+	
+	return genome
 end
 
 function newSpecies()
@@ -70,23 +288,60 @@ function newSpecies()
 	return species
 end
 
-function cullSpecies(cutToOne)
-	for s = 1,#pool.species do
-		local species = pool.species[s]
-		
-		table.sort(species.genomes, function (a,b)
-			return (a.fitness > b.fitness)
-		end)
-		
-		local remaining = math.ceil(#species.genomes/2)
-		if cutToOne then
-			remaining = 1
-		end
-		
-		while #species.genomes > remaining do
-			table.remove(species.genomes)
+function disjoint(genes1, genes2)
+	local i1 = {}
+	for i = 1,#genes1 do
+		local gene = genes1[i]
+		i1[gene.innovation] = true
+	end
+
+	local i2 = {}
+	for i = 1,#genes2 do
+		local gene = genes2[i]
+		i2[gene.innovation] = true
+	end
+	
+	local disjointGenes = 0
+	for i = 1,#genes1 do
+		local gene = genes1[i]
+		if not i2[gene.innovation] then
+			disjointGenes = disjointGenes+1
 		end
 	end
+	
+	for i = 1,#genes2 do
+		local gene = genes2[i]
+		if not i1[gene.innovation] then
+			disjointGenes = disjointGenes+1
+		end
+	end
+	
+	local n = math.max(#genes1, #genes2)
+	
+	return disjointGenes / n
+end
+
+function weights(genes1, genes2)
+	local i2 = {}
+	
+	for i = 1,#genes2 do
+		local gene = genes2[i]
+		i2[gene.innovation] = gene
+	end
+
+	local sum = 0
+	local coincident = 0
+	
+	for i = 1,#genes1 do
+		local gene = genes1[i]
+		if i2[gene.innovation] ~= nil then
+			local gene2 = i2[gene.innovation]
+			sum = sum + math.abs(gene.weight - gene2.weight)
+			coincident = coincident + 1
+		end
+	end
+	
+	return sum / coincident
 end
 
 function sameSpecies(genome1, genome2)
@@ -111,6 +366,170 @@ function addToSpecies(child)
 		local childSpecies = newSpecies()
 		table.insert(childSpecies.genomes, child)
 		table.insert(pool.species, childSpecies)
+	end
+end
+
+function newNeuron()
+	local neuron = {}
+	neuron.incoming = {}
+	neuron.value = 0.0
+	
+	return neuron
+end
+
+function newNetwork(genome)
+	local network = {}
+	network.neurons = {}
+	
+	for i=1,Inputs do
+		network.neurons[i] = newNeuron()
+	end
+	
+	for o=1,Outputs do
+		network.neurons[config.NeatConfig.MaxNodes+o] = newNeuron()
+	end
+	
+	table.sort(genome.genes, function (a,b)
+		return (a.out < b.out)
+	end)
+	
+	for i=1,#genome.genes do
+		local gene = genome.genes[i]
+		if gene.enabled then
+			if network.neurons[gene.out] == nil then
+				network.neurons[gene.out] = newNeuron()
+			end
+			
+			local neuron = network.neurons[gene.out]
+			table.insert(neuron.incoming, gene)
+			
+			if network.neurons[gene.into] == nil then
+				network.neurons[gene.into] = newNeuron()
+			end
+		end
+	end
+	
+	genome.network = network
+end
+
+function evaluateNetwork(network, inputs, inputDeltas)
+	table.insert(inputs, 1)
+	table.insert(inputDeltas,99)
+	
+	if #inputs ~= Inputs then
+		console.writeline("Incorrect number of neural network inputs.")
+		return {}
+	end
+
+	for i=1,Inputs do
+		network.neurons[i].value = inputs[i] * inputDeltas[i]
+	end
+	
+	for _,neuron in pairs(network.neurons) do
+		local sum = 0
+		for j = 1,#neuron.incoming do
+			local incoming = neuron.incoming[j]
+			local other = network.neurons[incoming.into]
+			sum = sum + incoming.weight * other.value
+		end
+		
+		if #neuron.incoming > 0 then
+			neuron.value = mathFunctions.sigmoid(sum)
+		end
+	end
+	
+	local outputs = {}
+	for o=1,Outputs do
+		local button = "P1 " .. config.ButtonNames[o]
+		if network.neurons[config.NeatConfig.MaxNodes+o].value > 0 then
+			outputs[button] = true
+		else
+			outputs[button] = false
+		end
+	end
+	
+	return outputs
+end
+
+function evaluateCurrent()
+	local species = pool.species[pool.currentSpecies]
+	local genome = species.genomes[pool.currentGenome]
+	local inputDeltas = {}
+	inputs, inputDeltas = game.getInputs()
+	controller = evaluateNetwork(genome.network, inputs, inputDeltas)
+	
+	if controller["P1 Left"] and controller["P1 Right"] then
+		controller["P1 Left"] = false
+		controller["P1 Right"] = false
+	end
+	
+	if controller["P1 Up"] and controller["P1 Down"] then
+		controller["P1 Up"] = false
+		controller["P1 Down"] = false
+	end
+
+	joypad.set(controller)
+end
+
+function initializeRun()
+	savestate.load(config.NeatConfig.Filename);
+	
+	rightmost = 0
+	pool.currentFrame = 0
+	timeout = config.NeatConfig.TimeoutConstant
+	game.clearJoypad()
+	
+	startHealth = game.getHealth()
+	startMissiles = game.getMissiles()
+	startSuperMissiles = game.getSuperMissiles()
+	startBombs = game.getBombs()
+	startTanks = game.getTanks()
+	
+	checkSamusCollision = true
+	samusHitCounter = 0
+	
+	local species = pool.species[pool.currentSpecies]
+	local genome = species.genomes[pool.currentGenome]
+	newNetwork(genome)
+	evaluateCurrent()
+end
+
+function initializePool()
+	pool = newPool()
+
+	for i=1,config.NeatConfig.Population do
+		basic = basicGenome()
+		addToSpecies(basic)
+	end
+
+	initializeRun()
+end
+
+if pool == nil then
+	initializePool()
+end
+
+
+--##########################################################
+-- NEAT Functions
+--##########################################################
+
+function cullSpecies(cutToOne)
+	for s = 1,#pool.species do
+		local species = pool.species[s]
+		
+		table.sort(species.genomes, function (a,b)
+			return (a.fitness > b.fitness)
+		end)
+		
+		local remaining = math.ceil(#species.genomes/2)
+		if cutToOne then
+			remaining = 1
+		end
+		
+		while #species.genomes > remaining do
+			table.remove(species.genomes)
+		end
 	end
 end
 
@@ -189,27 +608,6 @@ function crossoverSpecies(species)
 	return child
 end
 
-function newGenome()
-	local genome = {}
-	genome.genes = {}
-	genome.fitness = 0
-	genome.adjustedFitness = 0
-	genome.network = {}
-	genome.maxneuron = 0
-	genome.globalRank = 0
-	
-	genome.mutationRates = {}
-	genome.mutationRates["connections"] = config.NeatConfig.MutateConnectionsChance
-	genome.mutationRates["link"] = config.NeatConfig.LinkMutationChance
-	genome.mutationRates["bias"] = config.NeatConfig.BiasMutationChance
-	genome.mutationRates["node"] = config.NeatConfig.NodeMutationChance
-	genome.mutationRates["enable"] = config.NeatConfig.EnableMutationChance
-	genome.mutationRates["disable"] = config.NeatConfig.DisableMutationChance
-	genome.mutationRates["step"] = config.NeatConfig.StepSize
-	
-	return genome
-end
-
 function copyGenome(genome)
 	local genome2 = newGenome()
 	
@@ -239,218 +637,6 @@ function nextGenome()
 			pool.currentSpecies = 1
 		end
 	end
-end
-
-function basicGenome()
-	local genome = newGenome()
-	local innovation = 1
-
-	genome.maxneuron = Inputs
-	mutate(genome)
-	
-	return genome
-end
-
-function newInnovation()
-	pool.innovation = pool.innovation + 1
-	
-	return pool.innovation
-end
-
-function newGene()
-	local gene = {}
-	gene.into = 0
-	gene.out = 0
-	gene.weight = 0.0
-	gene.enabled = true
-	gene.innovation = 0
-	
-	return gene
-end
-
-function copyGene(gene)
-	local gene2 = newGene()
-	gene2.into = gene.into
-	gene2.out = gene.out
-	gene2.weight = gene.weight
-	gene2.enabled = gene.enabled
-	gene2.innovation = gene.innovation
-	
-	return gene2
-end
-
-function containsLink(genes, link)
-	for i=1,#genes do
-		local gene = genes[i]
-		
-		if gene.into == link.into and gene.out == link.out then
-			return true
-		end
-	end
-end
-
-function newNeuron()
-	local neuron = {}
-	neuron.incoming = {}
-	neuron.value = 0.0
-	
-	return neuron
-end
-
-function randomNeuron(genes, nonInput)
-	local neurons = {}
-	
-	if not nonInput then
-		for i=1,Inputs do
-			neurons[i] = true
-		end
-	end
-	
-	for o=1,Outputs do
-		neurons[config.NeatConfig.MaxNodes+o] = true
-	end
-	
-	for i=1,#genes do
-		if (not nonInput) or genes[i].into > Inputs then
-			neurons[genes[i].into] = true
-		end
-	
-		if (not nonInput) or genes[i].out > Inputs then
-			neurons[genes[i].out] = true
-		end
-	end
-
-	local count = 0
-	for _,_ in pairs(neurons) do
-		count = count + 1
-	end
-	
-	local n = math.random(1, count)
-	for k,v in pairs(neurons) do
-		n = n-1
-		if n == 0 then
-			return k
-		end
-	end
-	
-	return 0
-end
-
-function newNetwork(genome)
-	local network = {}
-	network.neurons = {}
-	
-	for i=1,Inputs do
-		network.neurons[i] = newNeuron()
-	end
-	
-	for o=1,Outputs do
-		network.neurons[config.NeatConfig.MaxNodes+o] = newNeuron()
-	end
-	
-	table.sort(genome.genes, function (a,b)
-		return (a.out < b.out)
-	end)
-	
-	for i=1,#genome.genes do
-		local gene = genome.genes[i]
-		if gene.enabled then
-			if network.neurons[gene.out] == nil then
-				network.neurons[gene.out] = newNeuron()
-			end
-			
-			local neuron = network.neurons[gene.out]
-			table.insert(neuron.incoming, gene)
-			
-			if network.neurons[gene.into] == nil then
-				network.neurons[gene.into] = newNeuron()
-			end
-		end
-	end
-	
-	genome.network = network
-end
-
-function weights(genes1, genes2)
-	local i2 = {}
-	
-	for i = 1,#genes2 do
-		local gene = genes2[i]
-		i2[gene.innovation] = gene
-	end
-
-	local sum = 0
-	local coincident = 0
-	
-	for i = 1,#genes1 do
-		local gene = genes1[i]
-		if i2[gene.innovation] ~= nil then
-			local gene2 = i2[gene.innovation]
-			sum = sum + math.abs(gene.weight - gene2.weight)
-			coincident = coincident + 1
-		end
-	end
-	
-	return sum / coincident
-end
-
-function evaluateNetwork(network, inputs, inputDeltas)
-	table.insert(inputs, 1)
-	table.insert(inputDeltas,99)
-	
-	if #inputs ~= Inputs then
-		console.writeline("Incorrect number of neural network inputs.")
-		return {}
-	end
-
-	for i=1,Inputs do
-		network.neurons[i].value = inputs[i] * inputDeltas[i]
-	end
-	
-	for _,neuron in pairs(network.neurons) do
-		local sum = 0
-		for j = 1,#neuron.incoming do
-			local incoming = neuron.incoming[j]
-			local other = network.neurons[incoming.into]
-			sum = sum + incoming.weight * other.value
-		end
-		
-		if #neuron.incoming > 0 then
-			neuron.value = mathFunctions.sigmoid(sum)
-		end
-	end
-	
-	local outputs = {}
-	for o=1,Outputs do
-		local button = "P1 " .. config.ButtonNames[o]
-		if network.neurons[config.NeatConfig.MaxNodes+o].value > 0 then
-			outputs[button] = true
-		else
-			outputs[button] = false
-		end
-	end
-	
-	return outputs
-end
-
-function evaluateCurrent()
-	local species = pool.species[pool.currentSpecies]
-	local genome = species.genomes[pool.currentGenome]
-	local inputDeltas = {}
-	inputs, inputDeltas = game.getInputs()
-	controller = evaluateNetwork(genome.network, inputs, inputDeltas)
-	
-	if controller["P1 Left"] and controller["P1 Right"] then
-		controller["P1 Left"] = false
-		controller["P1 Right"] = false
-	end
-	
-	if controller["P1 Up"] and controller["P1 Down"] then
-		controller["P1 Up"] = false
-		controller["P1 Down"] = false
-	end
-
-	joypad.set(controller)
 end
 
 function calculateAverageFitness(species)
@@ -561,184 +747,162 @@ function crossover(g1, g2)
 	return child
 end
 
-function pointMutate(genome)
-	local step = genome.mutationRates["step"]
+
+--##########################################################
+-- File Management
+--##########################################################
+
+function writeFile(filename)
+	local file = io.open(filename, "w")
+    file:write(pool.generation .. "\n")
+    file:write(pool.maxFitness .. "\n")
+    file:write(#pool.species .. "\n")
 	
-	for i=1,#genome.genes do
-		local gene = genome.genes[i]
-		if math.random() < config.NeatConfig.PerturbChance then
-			gene.weight = gene.weight + math.random() * step*2 - step
-		else
-			gene.weight = math.random()*4-2
+    for n,species in pairs(pool.species) do
+        file:write(species.topFitness .. "\n")
+        file:write(species.staleness .. "\n")
+        file:write(#species.genomes .. "\n")
+		
+        for m,genome in pairs(species.genomes) do
+            file:write(genome.fitness .. "\n")
+            file:write(genome.maxneuron .. "\n")
+			
+            for mutation,rate in pairs(genome.mutationRates) do
+                file:write(mutation .. "\n")
+                file:write(rate .. "\n")
+            end
+			file:write("done\n")
+			
+			file:write(#genome.genes .. "\n")
+			for l,gene in pairs(genome.genes) do
+				file:write(gene.into .. " ")
+				file:write(gene.out .. " ")
+				file:write(gene.weight .. " ")
+				file:write(gene.innovation .. " ")
+				
+				if(gene.enabled) then
+					file:write("1\n")
+				else
+					file:write("0\n")
+				end
+			end
 		end
 	end
+    file:close()
 end
 
-function linkMutate(genome, forceBias)
-	local neuron1 = randomNeuron(genome.genes, false)
-	local neuron2 = randomNeuron(genome.genes, true)
-	local newLink = newGene()
+function loadFile(filename)
+	print("Loading pool from " .. filename)
+    local file = io.open(filename, "r")
+    pool = newPool()
+    pool.generation = file:read("*number")
+    pool.maxFitness = file:read("*number")
+    forms.settext(MaxLabel, "Max Fitness: " .. math.floor(pool.maxFitness))
 	
-	if neuron1 <= Inputs and neuron2 <= Inputs then
-		--Both input nodes
-		return
-	end
+    local numSpecies = file:read("*number")
+    for s=1,numSpecies do
+        local species = newSpecies()
+        table.insert(pool.species, species)
+        species.topFitness = file:read("*number")
+        species.staleness = file:read("*number")
+		
+        local numGenomes = file:read("*number")
+        for g=1,numGenomes do
+            local genome = newGenome()
+            table.insert(species.genomes, genome)
+            genome.fitness = file:read("*number")
+            genome.maxneuron = file:read("*number")
+			
+            local line = file:read("*line")
+            while line ~= "done" do
+                genome.mutationRates[line] = file:read("*number")
+                line = file:read("*line")
+            end
+			
+            local numGenes = file:read("*number")
+            for n=1,numGenes do
+                local gene = newGene()
+                local enabled				
+				local geneStr = file:read("*line")
+				
+				local geneArr = splitGeneStr(geneStr)
+				gene.into = tonumber(geneArr[1])
+				gene.out = tonumber(geneArr[2])
+				gene.weight = tonumber(geneArr[3])
+				gene.innovation = tonumber(geneArr[4])
+				enabled = tonumber(geneArr[5])
+				
+                if enabled == 0 then
+                    gene.enabled = false
+                else
+                    gene.enabled = true
+                end
+				
+				table.insert(genome.genes, gene)
+            end
+        end
+    end
+    file:close()   
+    
+    while fitnessAlreadyMeasured() do
+        nextGenome()
+    end
 	
-	if neuron2 <= Inputs then
-		-- Swap output and input
-		local temp = neuron1
-		neuron1 = neuron2
-		neuron2 = temp
-	end
-
-	newLink.into = neuron1
-	newLink.out = neuron2
-	
-	if forceBias then
-		newLink.into = Inputs
-	end
-	
-	if containsLink(genome.genes, newLink) then
-		return
-	end
-	
-	newLink.innovation = newInnovation()
-	newLink.weight = math.random()*4-2
-	
-	table.insert(genome.genes, newLink)
+    initializeRun()
+    pool.currentFrame = pool.currentFrame + 1
+	print("Pool loaded.")
 end
 
-function nodeMutate(genome)
-	if #genome.genes == 0 then
-		return
-	end
-
-	genome.maxneuron = genome.maxneuron + 1
-
-	local gene = genome.genes[math.random(1,#genome.genes)]
-	if not gene.enabled then
-		return
-	end
-	
-	gene.enabled = false
-	
-	local gene1 = copyGene(gene)
-	gene1.out = genome.maxneuron
-	gene1.weight = 1.0
-	gene1.innovation = newInnovation()
-	gene1.enabled = true
-	table.insert(genome.genes, gene1)
-	
-	local gene2 = copyGene(gene)
-	gene2.into = genome.maxneuron
-	gene2.innovation = newInnovation()
-	gene2.enabled = true
-	table.insert(genome.genes, gene2)
+function savePool()
+	local filename = forms.gettext(saveLoadFile)
+	print(filename)
+	writeFile(filename)
 end
 
-function enableDisableMutate(genome, enable)
-	local candidates = {}
-	
-	for _,gene in pairs(genome.genes) do
-		if gene.enabled == not enable then
-			table.insert(candidates, gene)
-		end
-	end
-	
-	if #candidates == 0 then
-		return
-	end
-	
-	local gene = candidates[math.random(1,#candidates)]
-	gene.enabled = not gene.enabled
+function loadPool()
+	filename = forms.openfile("default.State.pool")
+	forms.settext(saveLoadFile, filename)
+	loadFile(filename)
 end
 
-function mutate(genome)
-	for mutation,rate in pairs(genome.mutationRates) do
-		if math.random(1,2) == 1 then
-			genome.mutationRates[mutation] = 0.95*rate
-		else
-			genome.mutationRates[mutation] = 1.05263*rate
+function playTop()
+	local maxfitness = 0
+	local maxs, maxg
+	
+	for s,species in pairs(pool.species) do
+		for g,genome in pairs(species.genomes) do
+			if genome.fitness > maxfitness then
+				maxfitness = genome.fitness
+				maxs = s
+				maxg = g
+			end
 		end
-	end
-
-	if math.random() < genome.mutationRates["connections"] then
-		pointMutate(genome)
 	end
 	
-	local p = genome.mutationRates["link"]
-	while p > 0 do
-		if math.random() < p then
-			linkMutate(genome, false)
-		end
-		p = p - 1
-	end
-
-	p = genome.mutationRates["bias"]
-	while p > 0 do
-		if math.random() < p then
-			linkMutate(genome, true)
-		end
-		p = p - 1
-	end
-	
-	p = genome.mutationRates["node"]
-	while p > 0 do
-		if math.random() < p then
-			nodeMutate(genome)
-		end
-		p = p - 1
-	end
-	
-	p = genome.mutationRates["enable"]
-	while p > 0 do
-		if math.random() < p then
-			enableDisableMutate(genome, true)
-		end
-		p = p - 1
-	end
-
-	p = genome.mutationRates["disable"]
-	while p > 0 do
-		if math.random() < p then
-			enableDisableMutate(genome, false)
-		end
-		p = p - 1
-	end
+	pool.currentSpecies = maxs
+	pool.currentGenome = maxg
+	pool.maxFitness = maxfitness
+	forms.settext(MaxLabel, "Max Fitness: " .. math.floor(pool.maxFitness))
+	initializeRun()
+	pool.currentFrame = pool.currentFrame + 1
+	return
 end
 
-function disjoint(genes1, genes2)
-	local i1 = {}
-	for i = 1,#genes1 do
-		local gene = genes1[i]
-		i1[gene.innovation] = true
-	end
-
-	local i2 = {}
-	for i = 1,#genes2 do
-		local gene = genes2[i]
-		i2[gene.innovation] = true
-	end
+function splitGeneStr(inputstr, sep)
+    if sep == nil then
+        sep = "%s"
+    end
 	
-	local disjointGenes = 0
-	for i = 1,#genes1 do
-		local gene = genes1[i]
-		if not i2[gene.innovation] then
-			disjointGenes = disjointGenes+1
-		end
-	end
+    local t={} ; i=1
+    for str in string.gmatch(inputstr, "([^"..sep.."]+)") do
+        t[i] = str
+        i = i + 1
+    end
 	
-	for i = 1,#genes2 do
-		local gene = genes2[i]
-		if not i1[gene.innovation] then
-			disjointGenes = disjointGenes+1
-		end
-	end
-	
-	local n = math.max(#genes1, #genes2)
-	
-	return disjointGenes / n
+    return t
 end
+
+writeFile("temp.pool")
 
 
 --##########################################################
@@ -902,15 +1066,6 @@ function onExit()
 	forms.destroy(form)
 end
 
-form = forms.newform(500, 500, "Metroid-Learning")
-netPicture = forms.pictureBox(form, 5, 250,470, 200)
-
-event.onexit(onExit)
-
-if pool == nil then
-	initializePool()
-end
-
 GenerationLabel = forms.label(form, "Generation: " .. pool.generation, 5, 5)
 SpeciesLabel = forms.label(form, "Species: " .. pool.currentSpecies, 130, 5)
 GenomeLabel = forms.label(form, "Genome: " .. pool.currentGenome, 230, 5)
@@ -936,163 +1091,6 @@ saveLoadFile = forms.textbox(form, config.NeatConfig.Filename .. ".pool", 170, 2
 saveLoadLabel = forms.label(form, "Save/Load:", 5, 129)
 spritelist.InitSpriteList()
 spritelist.InitExtSpriteList()
-
-
---##########################################################
--- File Management
---##########################################################
-
-function writeFile(filename)
-	local file = io.open(filename, "w")
-    file:write(pool.generation .. "\n")
-    file:write(pool.maxFitness .. "\n")
-    file:write(#pool.species .. "\n")
-	
-    for n,species in pairs(pool.species) do
-        file:write(species.topFitness .. "\n")
-        file:write(species.staleness .. "\n")
-        file:write(#species.genomes .. "\n")
-		
-        for m,genome in pairs(species.genomes) do
-            file:write(genome.fitness .. "\n")
-            file:write(genome.maxneuron .. "\n")
-			
-            for mutation,rate in pairs(genome.mutationRates) do
-                file:write(mutation .. "\n")
-                file:write(rate .. "\n")
-            end
-			file:write("done\n")
-			
-			file:write(#genome.genes .. "\n")
-			for l,gene in pairs(genome.genes) do
-				file:write(gene.into .. " ")
-				file:write(gene.out .. " ")
-				file:write(gene.weight .. " ")
-				file:write(gene.innovation .. " ")
-				
-				if(gene.enabled) then
-					file:write("1\n")
-				else
-					file:write("0\n")
-				end
-			end
-		end
-	end
-    file:close()
-end
-
-function loadFile(filename)
-	print("Loading pool from " .. filename)
-    local file = io.open(filename, "r")
-    pool = newPool()
-    pool.generation = file:read("*number")
-    pool.maxFitness = file:read("*number")
-    forms.settext(MaxLabel, "Max Fitness: " .. math.floor(pool.maxFitness))
-	
-    local numSpecies = file:read("*number")
-    for s=1,numSpecies do
-        local species = newSpecies()
-        table.insert(pool.species, species)
-        species.topFitness = file:read("*number")
-        species.staleness = file:read("*number")
-		
-        local numGenomes = file:read("*number")
-        for g=1,numGenomes do
-            local genome = newGenome()
-            table.insert(species.genomes, genome)
-            genome.fitness = file:read("*number")
-            genome.maxneuron = file:read("*number")
-			
-            local line = file:read("*line")
-            while line ~= "done" do
-                genome.mutationRates[line] = file:read("*number")
-                line = file:read("*line")
-            end
-			
-            local numGenes = file:read("*number")
-            for n=1,numGenes do
-                local gene = newGene()
-                local enabled				
-				local geneStr = file:read("*line")
-				
-				local geneArr = splitGeneStr(geneStr)
-				gene.into = tonumber(geneArr[1])
-				gene.out = tonumber(geneArr[2])
-				gene.weight = tonumber(geneArr[3])
-				gene.innovation = tonumber(geneArr[4])
-				enabled = tonumber(geneArr[5])
-				
-                if enabled == 0 then
-                    gene.enabled = false
-                else
-                    gene.enabled = true
-                end
-				
-				table.insert(genome.genes, gene)
-            end
-        end
-    end
-    file:close()   
-    
-    while fitnessAlreadyMeasured() do
-        nextGenome()
-    end
-	
-    initializeRun()
-    pool.currentFrame = pool.currentFrame + 1
-	print("Pool loaded.")
-end
-
-function savePool()
-	local filename = forms.gettext(saveLoadFile)
-	print(filename)
-	writeFile(filename)
-end
-
-function loadPool()
-	filename = forms.openfile("default.State.pool", config.PoolDir)
-	forms.settext(saveLoadFile, filename)
-	loadFile(filename)
-end
-
-function playTop()
-	local maxfitness = 0
-	local maxs, maxg
-	
-	for s,species in pairs(pool.species) do
-		for g,genome in pairs(species.genomes) do
-			if genome.fitness > maxfitness then
-				maxfitness = genome.fitness
-				maxs = s
-				maxg = g
-			end
-		end
-	end
-	
-	pool.currentSpecies = maxs
-	pool.currentGenome = maxg
-	pool.maxFitness = maxfitness
-	forms.settext(MaxLabel, "Max Fitness: " .. math.floor(pool.maxFitness))
-	initializeRun()
-	pool.currentFrame = pool.currentFrame + 1
-	return
-end
-
-function splitGeneStr(inputstr, sep)
-    if sep == nil then
-        sep = "%s"
-    end
-	
-    local t={} ; i=1
-    for str in string.gmatch(inputstr, "([^"..sep.."]+)") do
-        t[i] = str
-        i = i + 1
-    end
-	
-    return t
-end
-
-writeFile(config.PoolDir.."temp.pool")
 
 
 --##########################################################
@@ -1143,7 +1141,8 @@ while true do
 		local bombs = game.getBombs() - startBombs
 		local tanks = game.getTanks() - startTanks
 		
-		console.writeline("Missiles: " .. missiles .. " Super Missiles: " .. superMissiles .. " Power Bombs: " .. bombs .. " Energy Tanks: " .. tanks)
+		-- quickfix: too much info slows training down
+		--console.writeline("Missiles: " .. missiles .. " Super Missiles: " .. superMissiles .. " Power Bombs: " .. bombs .. " Energy Tanks: " .. tanks)
 
 		local pickupFitness = (missiles * 10) + (superMissiles * 100) + (bombs * 100) + (tanks * 1000)
 		if (missiles + superMissiles + bombs + tanks) > 0 then 
@@ -1204,8 +1203,11 @@ while true do
 	forms.settext(HealthLabel, "Health: " .. Health)
 	forms.settext(MissilesLabel, "Missiles: " .. (game.getMissiles() - startMissiles))
 	forms.settext(SuperMissilesLabel, "Super Missiles: " .. (game.getSuperMissiles() - startSuperMissiles))
-	forms.settext(BombsLabel, "Power Bombs: " .. (game.getBombs() - startBombs))
-	forms.settext(TanksLabel, "Reserve Tanks: " .. (game.getTanks() - startTanks))
+	
+	-- quickfix: remove bombs & tanks label because of invalid argument exception (too little space?)
+	--forms.settext(BombsLabel, "Power Bombs: " .. (game.getBombs() - startBombs))
+	--forms.settext(TanksLabel, "Reserve Tanks: " .. (game.getTanks() - startTanks))
+	
 	forms.settext(DmgLabel, "Damage: " .. samusHitCounter)
 
 	pool.currentFrame = pool.currentFrame + 1

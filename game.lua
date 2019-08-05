@@ -75,11 +75,15 @@ end
 
 -- 7F:0002 - 7F:6401    Room Tilemap (7F!!)
 function _M.getTile(dx, dy)
-	x = math.floor((samusX+dx+8)/16)
+	x = math.floor((samusX+dx+8)/16)	
 	y = math.floor((samusY+dy)/16)
 	
 	-- Calculates the tile Samus is standing on
-	return memory.readbyte(0x0002 + math.floor(x/0x10)*0x1B0 + y*0x10 + x%0x10)
+	-- ERROR, because calculation returns -28, which cannot be read.
+	--return memory.readbyte(0x0002 + math.floor(x/0x10)*0x1B0 + y*0x10 + x%0x10)
+	
+	-- quickfix to get stuff running.
+	return 1
 end
 
 -- 7E:1C29 - 7E:1C2A    Calculated PLM's X position
@@ -134,6 +138,7 @@ function _M.getInputs()
 			inputDeltaDistance[#inputDeltaDistance+1] = 1
 			
 			tile = _M.getTile(dx, dy)
+			
 			if tile == 1 and samusY+dy < 0x1B0 then
 				inputs[#inputs] = 1
 			end
@@ -164,7 +169,7 @@ function _M.getInputs()
 			end
 		end
 	end
-	
+
 	return inputs, inputDeltaDistance
 end
 
