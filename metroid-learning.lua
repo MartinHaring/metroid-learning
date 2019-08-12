@@ -471,7 +471,7 @@ function newGeneration()
 	end
 	
 	pool.generation = pool.generation + 1
-	ff.writeFile(forms.gettext(saveLoadFile) .. ".gen" .. pool.generation .. ".pool")
+	ff.writeFile(forms.gettext(saveLoadFile) .. ".gen" .. pool.generation .. ".pool", pool)
 end
 
 -- list functions instead of for loop?
