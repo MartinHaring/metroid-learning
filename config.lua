@@ -22,7 +22,7 @@ _M.NeatConfig = {
 	StepSize = 0.1,
 	DisableMutationChance = 0.4,
 	EnableMutationChance = 0.2,
-	TimeoutConstant = 20,
+	TimeoutConstant = 30,
 	MaxNodes = 1000000
 }
 
@@ -36,14 +36,13 @@ _M.ButtonNames = {
 	"Left",
 	"Right",
 	"L",
-	"R",
-	"Select",
-	"Start"
+	"R"
 }
 	
 _M.BoxRadius = 6
 _M.InputSize = (_M.BoxRadius*2+1)*(_M.BoxRadius*2+1)
 
 _M.Running = false
+
 
 return _M

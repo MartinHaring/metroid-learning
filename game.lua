@@ -1,5 +1,5 @@
-config = require "config"
-spritelist = require "spritelist"
+cnfg = require "config"
+mf = require "mathFunctions"
 
 local _M = {}
 
@@ -132,8 +132,8 @@ function _M.getInputs()
 	local inputs = {}
 	local inputDeltaDistance = {}
 	
-	for dy=-config.BoxRadius*16,config.BoxRadius*16,16 do
-		for dx=-config.BoxRadius*16,config.BoxRadius*16,16 do
+	for dy=-cnfg.BoxRadius*16,cnfg.BoxRadius*16,16 do
+		for dx=-cnfg.BoxRadius*16,cnfg.BoxRadius*16,16 do
 			inputs[#inputs+1] = 0
 			inputDeltaDistance[#inputDeltaDistance+1] = 1
 			
@@ -151,7 +151,7 @@ function _M.getInputs()
 					
 					local dist = math.sqrt((distx * distx) + (disty * disty))
 					if dist > 8 then
-						inputDeltaDistance[#inputDeltaDistance] = mathFunctions.squashDistance(dist)
+						inputDeltaDistance[#inputDeltaDistance] = mf.squashDistance(dist)
 					end
 				end
 			end
@@ -163,7 +163,7 @@ function _M.getInputs()
 					inputs[#inputs] = extended[i]["good"]
 					local dist = math.sqrt((distx * distx) + (disty * disty))
 					if dist > 8 then
-						inputDeltaDistance[#inputDeltaDistance] = mathFunctions.squashDistance(dist)
+						inputDeltaDistance[#inputDeltaDistance] = mf.squashDistance(dist)
 					end
 				end
 			end
@@ -175,10 +175,11 @@ end
 
 function _M.clearJoypad()
 	controller = {}
-	for b = 1,#config.ButtonNames do
-		controller["P1 " .. config.ButtonNames[b]] = false
+	for b = 1,#cnfg.ButtonNames do
+		controller["P1 " .. cnfg.ButtonNames[b]] = false
 	end
 	joypad.set(controller)
 end
+
 
 return _M

@@ -1,120 +1,30 @@
-config = require "config"
-spritelist = require "spritelist"
+cnfg = require "config"
 game = require "game"
-mathFunctions = require "mathFunctions"
+sl = require "spritelist"
+mf = require "mathFunctions"
+ff = require "fileFunctions"
+nf = require "neatFunctions"
 
-Inputs = config.InputSize+1
-Outputs = #config.ButtonNames
+Inputs = cnfg.InputSize+1
+Outputs = #cnfg.ButtonNames
 
 form = forms.newform(500, 500, "Metroid-Learning")
 netPicture = forms.pictureBox(form, 5, 250,470, 200)
 
 event.onexit(onExit)
 
-function newPool()
-	local pool = {}
-	pool.species = {}
-	pool.generation = 0
-	pool.innovation = Outputs
-	pool.currentSpecies = 1
-	pool.currentGenome = 1
-	pool.currentFrame = 0
-	pool.maxFitness = 0
-	
-	return pool
-end
-
-function newGenome()
-	local genome = {}
-	genome.genes = {}
-	genome.fitness = 0
-	genome.adjustedFitness = 0
-	genome.network = {}
-	genome.maxneuron = 0
-	genome.globalRank = 0
-	
-	genome.mutationRates = {}
-	genome.mutationRates["connections"] = config.NeatConfig.MutateConnectionsChance
-	genome.mutationRates["link"] = config.NeatConfig.LinkMutationChance
-	genome.mutationRates["bias"] = config.NeatConfig.BiasMutationChance
-	genome.mutationRates["node"] = config.NeatConfig.NodeMutationChance
-	genome.mutationRates["enable"] = config.NeatConfig.EnableMutationChance
-	genome.mutationRates["disable"] = config.NeatConfig.DisableMutationChance
-	genome.mutationRates["step"] = config.NeatConfig.StepSize
-	
-	return genome
-end
-
-function randomNeuron(genes, nonInput)
-	local neurons = {}
-	
-	if not nonInput then
-		for i=1,Inputs do
-			neurons[i] = true
-		end
-	end
-	
-	for o=1,Outputs do
-		neurons[config.NeatConfig.MaxNodes+o] = true
-	end
-	
-	for i=1,#genes do
-		if (not nonInput) or genes[i].into > Inputs then
-			neurons[genes[i].into] = true
-		end
-	
-		if (not nonInput) or genes[i].out > Inputs then
-			neurons[genes[i].out] = true
-		end
-	end
-
-	local count = 0
-	for _,_ in pairs(neurons) do
-		count = count + 1
-	end
-	
-	local n = math.random(1, count)
-	for k,v in pairs(neurons) do
-		n = n-1
-		if n == 0 then
-			return k
-		end
-	end
-	
-	return 0
-end
-
-function newGene()
-	local gene = {}
-	gene.into = 0
-	gene.out = 0
-	gene.weight = 0.0
-	gene.enabled = true
-	gene.innovation = 0
-	
-	return gene
-end
-
-function containsLink(genes, link)
-	for i=1,#genes do
-		local gene = genes[i]
-		
-		if gene.into == link.into and gene.out == link.out then
-			return true
-		end
-	end
-end
-
+-- shorten logic? ( += )
 function newInnovation()
 	pool.innovation = pool.innovation + 1
 	
 	return pool.innovation
 end
 
+-- optimize empty if
 function linkMutate(genome, forceBias)
-	local neuron1 = randomNeuron(genome.genes, false)
-	local neuron2 = randomNeuron(genome.genes, true)
-	local newLink = newGene()
+	local neuron1 = nf.randomNeuron(genome.genes, false)
+	local neuron2 = nf.randomNeuron(genome.genes, true)
+	local newLink = nf.newGene()
 	
 	if neuron1 <= Inputs and neuron2 <= Inputs then
 		--Both input nodes
@@ -131,11 +41,9 @@ function linkMutate(genome, forceBias)
 	newLink.into = neuron1
 	newLink.out = neuron2
 	
-	if forceBias then
-		newLink.into = Inputs
-	end
+	if forceBias then newLink.into = Inputs	end
 	
-	if containsLink(genome.genes, newLink) then
+	if nf.containsLink(genome.genes, newLink) then
 		return
 	end
 	
@@ -145,30 +53,7 @@ function linkMutate(genome, forceBias)
 	table.insert(genome.genes, newLink)
 end
 
-function pointMutate(genome)
-	local step = genome.mutationRates["step"]
-	
-	for i=1,#genome.genes do
-		local gene = genome.genes[i]
-		if math.random() < config.NeatConfig.PerturbChance then
-			gene.weight = gene.weight + math.random() * step*2 - step
-		else
-			gene.weight = math.random()*4-2
-		end
-	end
-end
-
-function copyGene(gene)
-	local gene2 = newGene()
-	gene2.into = gene.into
-	gene2.out = gene.out
-	gene2.weight = gene.weight
-	gene2.enabled = gene.enabled
-	gene2.innovation = gene.innovation
-	
-	return gene2
-end
-
+-- optimize empty if
 function nodeMutate(genome)
 	if #genome.genes == 0 then
 		return
@@ -183,20 +68,21 @@ function nodeMutate(genome)
 	
 	gene.enabled = false
 	
-	local gene1 = copyGene(gene)
+	local gene1 = nf.copyGene(gene)
 	gene1.out = genome.maxneuron
 	gene1.weight = 1.0
 	gene1.innovation = newInnovation()
 	gene1.enabled = true
 	table.insert(genome.genes, gene1)
 	
-	local gene2 = copyGene(gene)
+	local gene2 = nf.copyGene(gene)
 	gene2.into = genome.maxneuron
 	gene2.innovation = newInnovation()
 	gene2.enabled = true
 	table.insert(genome.genes, gene2)
 end
 
+-- optimize empty if
 function enableDisableMutate(genome, enable)
 	local candidates = {}
 	
@@ -214,6 +100,7 @@ function enableDisableMutate(genome, enable)
 	gene.enabled = not gene.enabled
 end
 
+-- replace while with recursion
 function mutate(genome)
 	for mutation,rate in pairs(genome.mutationRates) do
 		if math.random(1,2) == 1 then
@@ -223,53 +110,42 @@ function mutate(genome)
 		end
 	end
 
-	if math.random() < genome.mutationRates["connections"] then
-		pointMutate(genome)
-	end
+	if math.random() < genome.mutationRates["connections"] then genome = nf.pointMutate(genome) end
 	
 	local p = genome.mutationRates["link"]
 	while p > 0 do
-		if math.random() < p then
-			linkMutate(genome, false)
-		end
+		if math.random() < p then linkMutate(genome, false)	end
 		p = p - 1
 	end
 
 	p = genome.mutationRates["bias"]
 	while p > 0 do
-		if math.random() < p then
-			linkMutate(genome, true)
-		end
+		if math.random() < p then linkMutate(genome, true) end
 		p = p - 1
 	end
 	
 	p = genome.mutationRates["node"]
 	while p > 0 do
-		if math.random() < p then
-			nodeMutate(genome)
-		end
+		if math.random() < p then nodeMutate(genome) end
 		p = p - 1
 	end
 	
 	p = genome.mutationRates["enable"]
 	while p > 0 do
-		if math.random() < p then
-			enableDisableMutate(genome, true)
-		end
+		if math.random() < p then enableDisableMutate(genome, true) end
 		p = p - 1
 	end
 
 	p = genome.mutationRates["disable"]
 	while p > 0 do
-		if math.random() < p then
-			enableDisableMutate(genome, false)
-		end
+		if math.random() < p then enableDisableMutate(genome, false) end
 		p = p - 1
 	end
 end
 
+-- innovation needed?
 function basicGenome()
-	local genome = newGenome()
+	local genome = nf.newGenome()
 	local innovation = 1
 
 	genome.maxneuron = Inputs
@@ -278,103 +154,22 @@ function basicGenome()
 	return genome
 end
 
-function newSpecies()
-	local species = {}
-	species.topFitness = 0
-	species.staleness = 0
-	species.averageFitness = 0
-	species.genomes = {}
-	
-	return species
-end
-
-function disjoint(genes1, genes2)
-	local i1 = {}
-	for i = 1,#genes1 do
-		local gene = genes1[i]
-		i1[gene.innovation] = true
-	end
-
-	local i2 = {}
-	for i = 1,#genes2 do
-		local gene = genes2[i]
-		i2[gene.innovation] = true
-	end
-	
-	local disjointGenes = 0
-	for i = 1,#genes1 do
-		local gene = genes1[i]
-		if not i2[gene.innovation] then
-			disjointGenes = disjointGenes+1
-		end
-	end
-	
-	for i = 1,#genes2 do
-		local gene = genes2[i]
-		if not i1[gene.innovation] then
-			disjointGenes = disjointGenes+1
-		end
-	end
-	
-	local n = math.max(#genes1, #genes2)
-	
-	return disjointGenes / n
-end
-
-function weights(genes1, genes2)
-	local i2 = {}
-	
-	for i = 1,#genes2 do
-		local gene = genes2[i]
-		i2[gene.innovation] = gene
-	end
-
-	local sum = 0
-	local coincident = 0
-	
-	for i = 1,#genes1 do
-		local gene = genes1[i]
-		if i2[gene.innovation] ~= nil then
-			local gene2 = i2[gene.innovation]
-			sum = sum + math.abs(gene.weight - gene2.weight)
-			coincident = coincident + 1
-		end
-	end
-	
-	return sum / coincident
-end
-
-function sameSpecies(genome1, genome2)
-	local dd = config.NeatConfig.DeltaDisjoint*disjoint(genome1.genes, genome2.genes)
-	local dw = config.NeatConfig.DeltaWeights*weights(genome1.genes, genome2.genes)
-	
-	return dd + dw < config.NeatConfig.DeltaThreshold
-end
-
 function addToSpecies(child)
 	local foundSpecies = false
 	
 	for s=1,#pool.species do
 		local species = pool.species[s]
-		if not foundSpecies and sameSpecies(child, species.genomes[1]) then
+		if not foundSpecies and nf.sameSpecies(child, species.genomes[1]) then
 			table.insert(species.genomes, child)
 			foundSpecies = true
 		end
 	end
 	
 	if not foundSpecies then
-		local childSpecies = newSpecies()
+		local childSpecies = nf.newSpecies()
 		table.insert(childSpecies.genomes, child)
 		table.insert(pool.species, childSpecies)
 	end
-end
-
-function newNeuron()
-	local neuron = {}
-	neuron.incoming = {}
-	neuron.value = 0.0
-	
-	return neuron
 end
 
 function newNetwork(genome)
@@ -382,11 +177,11 @@ function newNetwork(genome)
 	network.neurons = {}
 	
 	for i=1,Inputs do
-		network.neurons[i] = newNeuron()
+		network.neurons[i] = nf.newNeuron()
 	end
 	
 	for o=1,Outputs do
-		network.neurons[config.NeatConfig.MaxNodes+o] = newNeuron()
+		network.neurons[cnfg.NeatConfig.MaxNodes+o] = nf.newNeuron()
 	end
 	
 	table.sort(genome.genes, function (a,b)
@@ -396,16 +191,12 @@ function newNetwork(genome)
 	for i=1,#genome.genes do
 		local gene = genome.genes[i]
 		if gene.enabled then
-			if network.neurons[gene.out] == nil then
-				network.neurons[gene.out] = newNeuron()
-			end
+			if network.neurons[gene.out] == nil then network.neurons[gene.out] = nf.newNeuron() end
 			
 			local neuron = network.neurons[gene.out]
 			table.insert(neuron.incoming, gene)
 			
-			if network.neurons[gene.into] == nil then
-				network.neurons[gene.into] = newNeuron()
-			end
+			if network.neurons[gene.into] == nil then network.neurons[gene.into] = nf.newNeuron() end
 		end
 	end
 	
@@ -433,15 +224,13 @@ function evaluateNetwork(network, inputs, inputDeltas)
 			sum = sum + incoming.weight * other.value
 		end
 		
-		if #neuron.incoming > 0 then
-			neuron.value = mathFunctions.sigmoid(sum)
-		end
+		if #neuron.incoming > 0 then neuron.value = mf.sigmoid(sum) end
 	end
 	
 	local outputs = {}
 	for o=1,Outputs do
-		local button = "P1 " .. config.ButtonNames[o]
-		if network.neurons[config.NeatConfig.MaxNodes+o].value > 0 then
+		local button = "P1 " .. cnfg.ButtonNames[o]
+		if network.neurons[cnfg.NeatConfig.MaxNodes+o].value > 0 then
 			outputs[button] = true
 		else
 			outputs[button] = false
@@ -471,12 +260,12 @@ function evaluateCurrent()
 	joypad.set(controller)
 end
 
+-- make var init extra?
 function initializeRun()
-	savestate.load(config.NeatConfig.Filename);
+	savestate.load(cnfg.NeatConfig.Filename);
 	
-	rightmost = 0
 	pool.currentFrame = 0
-	timeout = config.NeatConfig.TimeoutConstant
+	timeout = cnfg.NeatConfig.TimeoutConstant
 	game.clearJoypad()
 	
 	startHealth = game.getHealth()
@@ -487,7 +276,12 @@ function initializeRun()
 	
 	checkSamusCollision = true
 	samusHitCounter = 0
-	
+	explorationFitness = 0
+	samusXprev = 0
+	samusYprev = 0
+
+	if health == nil then health = 0 end
+
 	local species = pool.species[pool.currentSpecies]
 	local genome = species.genomes[pool.currentGenome]
 	newNetwork(genome)
@@ -495,9 +289,9 @@ function initializeRun()
 end
 
 function initializePool()
-	pool = newPool()
+	pool = nf.newPool()
 
-	for i=1,config.NeatConfig.Population do
+	for i=1,cnfg.NeatConfig.Population do
 		basic = basicGenome()
 		addToSpecies(basic)
 	end
@@ -505,15 +299,13 @@ function initializePool()
 	initializeRun()
 end
 
-if pool == nil then
-	initializePool()
-end
-
+if pool == nil then initializePool() end
 
 --##########################################################
 -- NEAT Functions
 --##########################################################
 
+-- extract anon function?
 function cullSpecies(cutToOne)
 	for s = 1,#pool.species do
 		local species = pool.species[s]
@@ -523,9 +315,7 @@ function cullSpecies(cutToOne)
 		end)
 		
 		local remaining = math.ceil(#species.genomes/2)
-		if cutToOne then
-			remaining = 1
-		end
+		if cutToOne then remaining = 1 end
 		
 		while #species.genomes > remaining do
 			table.remove(species.genomes)
@@ -533,6 +323,7 @@ function cullSpecies(cutToOne)
 	end
 end
 
+-- extract anon function?
 function removeStaleSpecies()
 	local survived = {}
 
@@ -549,9 +340,7 @@ function removeStaleSpecies()
 			species.staleness = species.staleness + 1
 		end
 		
-		if species.staleness < config.NeatConfig.StaleSpecies or species.topFitness >= pool.maxFitness then
-			table.insert(survived, species)
-		end
+		if species.staleness < cnfg.NeatConfig.StaleSpecies or species.topFitness >= pool.maxFitness then table.insert(survived, species) end
 	end
 
 	pool.species = survived
@@ -559,11 +348,11 @@ end
 
 function removeWeakSpecies()
 	local survived = {}
-	local sum = totalAverageFitness()
+	local sum = nf.totalAverageFitness(pool)
 	
 	for s = 1,#pool.species do
 		local species = pool.species[s]
-		breed = math.floor(species.averageFitness / sum * config.NeatConfig.Population)
+		breed = math.floor(species.averageFitness / sum * cnfg.NeatConfig.Population)
 		if breed >= 1 then
 			table.insert(survived, species)
 		end
@@ -572,6 +361,7 @@ function removeWeakSpecies()
 	pool.species = survived
 end
 
+-- extract anon function? list functions?
 function rankSpecies()
 	local global = {}
 	
@@ -591,10 +381,11 @@ function rankSpecies()
 	end
 end
 
+-- enhance return
 function crossoverSpecies(species)
 	local child = {}
 	
-	if math.random() < config.NeatConfig.CrossoverChance then
+	if math.random() < cnfg.NeatConfig.CrossoverChance then
 		g1 = species.genomes[math.random(1, #species.genomes)]
 		g2 = species.genomes[math.random(1, #species.genomes)]
 		child = crossover(g1, g2)
@@ -609,10 +400,10 @@ function crossoverSpecies(species)
 end
 
 function copyGenome(genome)
-	local genome2 = newGenome()
+	local genome2 = nf.newGenome()
 	
 	for g=1,#genome.genes do
-		table.insert(genome2.genes, copyGene(genome.genes[g]))
+		table.insert(genome2.genes, nf.copyGene(genome.genes[g]))
 	end
 	
 	genome2.maxneuron = genome.maxneuron
@@ -639,35 +430,7 @@ function nextGenome()
 	end
 end
 
-function calculateAverageFitness(species)
-	local total = 0
-	
-	for g=1,#species.genomes do
-		local genome = species.genomes[g]
-		total = total + genome.globalRank
-	end
-	
-	species.averageFitness = total / #species.genomes
-end
-
-function totalAverageFitness()
-	local total = 0
-	
-	for s = 1,#pool.species do
-		local species = pool.species[s]
-		total = total + species.averageFitness
-	end
-
-	return total
-end
-
-function fitnessAlreadyMeasured()
-	local species = pool.species[pool.currentSpecies]
-	local genome = species.genomes[pool.currentGenome]
-	
-	return genome.fitness ~= 0
-end
-
+-- optimizable
 function newGeneration()
 	-- Cull the bottom half of each species
 	cullSpecies(false)
@@ -677,18 +440,18 @@ function newGeneration()
 	
 	for s = 1,#pool.species do
 		local species = pool.species[s]
-		calculateAverageFitness(species)
+		species = nf.calculateAverageFitness(species)
 	end
 	
 	removeWeakSpecies()
 	
-	local sum = totalAverageFitness()
+	local sum = nf.totalAverageFitness(pool)
 	local children = {}
 	
 	for s = 1,#pool.species do
 		local species = pool.species[s]
 		
-		breed = math.floor(species.averageFitness / sum * config.NeatConfig.Population) - 1
+		breed = math.floor(species.averageFitness / sum * cnfg.NeatConfig.Population) - 1
 		for i=1,breed do
 			table.insert(children, crossoverSpecies(species))
 		end
@@ -697,7 +460,7 @@ function newGeneration()
 	-- Cull all but the top member of each species
 	cullSpecies(true)
 	
-	while #children + #pool.species < config.NeatConfig.Population do
+	while #children + #pool.species < cnfg.NeatConfig.Population do
 		local species = pool.species[math.random(1, #pool.species)]
 		table.insert(children, crossoverSpecies(species))
 	end
@@ -708,9 +471,10 @@ function newGeneration()
 	end
 	
 	pool.generation = pool.generation + 1
-	writeFile(forms.gettext(saveLoadFile) .. ".gen" .. pool.generation .. ".pool")
+	ff.writeFile(forms.gettext(saveLoadFile) .. ".gen" .. pool.generation .. ".pool")
 end
 
+-- list functions instead of for loop?
 function crossover(g1, g2)
 	-- Make sure g1 is the higher fitness genome
 	if g2.fitness > g1.fitness then
@@ -719,7 +483,7 @@ function crossover(g1, g2)
 		g2 = tempg
 	end
 
-	local child = newGenome()
+	local child = nf.newGenome()
 	local innovations2 = {}
 	
 	for i=1,#g2.genes do
@@ -732,9 +496,9 @@ function crossover(g1, g2)
 		local gene2 = innovations2[gene1.innovation]
 		
 		if gene2 ~= nil and math.random(2) == 1 and gene2.enabled then
-			table.insert(child.genes, copyGene(gene2))
+			table.insert(child.genes, nf.copyGene(gene2))
 		else
-			table.insert(child.genes, copyGene(gene1))
+			table.insert(child.genes, nf.copyGene(gene1))
 		end
 	end
 	
@@ -747,168 +511,11 @@ function crossover(g1, g2)
 	return child
 end
 
-
 --##########################################################
--- File Management
---##########################################################
-
-function writeFile(filename)
-	local file = io.open(filename, "w")
-    file:write(pool.generation .. "\n")
-    file:write(pool.maxFitness .. "\n")
-    file:write(#pool.species .. "\n")
-	
-    for n,species in pairs(pool.species) do
-        file:write(species.topFitness .. "\n")
-        file:write(species.staleness .. "\n")
-        file:write(#species.genomes .. "\n")
-		
-        for m,genome in pairs(species.genomes) do
-            file:write(genome.fitness .. "\n")
-            file:write(genome.maxneuron .. "\n")
-			
-            for mutation,rate in pairs(genome.mutationRates) do
-                file:write(mutation .. "\n")
-                file:write(rate .. "\n")
-            end
-			file:write("done\n")
-			
-			file:write(#genome.genes .. "\n")
-			for l,gene in pairs(genome.genes) do
-				file:write(gene.into .. " ")
-				file:write(gene.out .. " ")
-				file:write(gene.weight .. " ")
-				file:write(gene.innovation .. " ")
-				
-				if(gene.enabled) then
-					file:write("1\n")
-				else
-					file:write("0\n")
-				end
-			end
-		end
-	end
-    file:close()
-end
-
-function loadFile(filename)
-	print("Loading pool from " .. filename)
-    local file = io.open(filename, "r")
-    pool = newPool()
-    pool.generation = file:read("*number")
-    pool.maxFitness = file:read("*number")
-    forms.settext(MaxLabel, "Max Fitness: " .. math.floor(pool.maxFitness))
-	
-    local numSpecies = file:read("*number")
-    for s=1,numSpecies do
-        local species = newSpecies()
-        table.insert(pool.species, species)
-        species.topFitness = file:read("*number")
-        species.staleness = file:read("*number")
-		
-        local numGenomes = file:read("*number")
-        for g=1,numGenomes do
-            local genome = newGenome()
-            table.insert(species.genomes, genome)
-            genome.fitness = file:read("*number")
-            genome.maxneuron = file:read("*number")
-			
-            local line = file:read("*line")
-            while line ~= "done" do
-                genome.mutationRates[line] = file:read("*number")
-                line = file:read("*line")
-            end
-			
-            local numGenes = file:read("*number")
-            for n=1,numGenes do
-                local gene = newGene()
-                local enabled				
-				local geneStr = file:read("*line")
-				
-				local geneArr = splitGeneStr(geneStr)
-				gene.into = tonumber(geneArr[1])
-				gene.out = tonumber(geneArr[2])
-				gene.weight = tonumber(geneArr[3])
-				gene.innovation = tonumber(geneArr[4])
-				enabled = tonumber(geneArr[5])
-				
-                if enabled == 0 then
-                    gene.enabled = false
-                else
-                    gene.enabled = true
-                end
-				
-				table.insert(genome.genes, gene)
-            end
-        end
-    end
-    file:close()   
-    
-    while fitnessAlreadyMeasured() do
-        nextGenome()
-    end
-	
-    initializeRun()
-    pool.currentFrame = pool.currentFrame + 1
-	print("Pool loaded.")
-end
-
-function savePool()
-	local filename = forms.gettext(saveLoadFile)
-	print(filename)
-	writeFile(filename)
-end
-
-function loadPool()
-	filename = forms.openfile("default.State.pool")
-	forms.settext(saveLoadFile, filename)
-	loadFile(filename)
-end
-
-function playTop()
-	local maxfitness = 0
-	local maxs, maxg
-	
-	for s,species in pairs(pool.species) do
-		for g,genome in pairs(species.genomes) do
-			if genome.fitness > maxfitness then
-				maxfitness = genome.fitness
-				maxs = s
-				maxg = g
-			end
-		end
-	end
-	
-	pool.currentSpecies = maxs
-	pool.currentGenome = maxg
-	pool.maxFitness = maxfitness
-	forms.settext(MaxLabel, "Max Fitness: " .. math.floor(pool.maxFitness))
-	initializeRun()
-	pool.currentFrame = pool.currentFrame + 1
-	return
-end
-
-function splitGeneStr(inputstr, sep)
-    if sep == nil then
-        sep = "%s"
-    end
-	
-    local t={} ; i=1
-    for str in string.gmatch(inputstr, "([^"..sep.."]+)") do
-        t[i] = str
-        i = i + 1
-    end
-	
-    return t
-end
-
-writeFile("temp.pool")
-
-
---##########################################################
--- Display Checks
+-- Display
 --##########################################################
 
+-- shorten, divide, break down?
 function displayGenome(genome)
 	forms.clear(netPicture,0x80808080)
 	local network = genome.network
@@ -916,8 +523,8 @@ function displayGenome(genome)
 	local i = 1
 	local cell = {}
 	
-	for dy=-config.BoxRadius,config.BoxRadius do
-		for dx=-config.BoxRadius,config.BoxRadius do
+	for dy=-cnfg.BoxRadius,cnfg.BoxRadius do
+		for dx=-cnfg.BoxRadius,cnfg.BoxRadius do
 			cell = {}
 			cell.x = 50+5*dx
 			cell.y = 70+5*dy
@@ -937,8 +544,8 @@ function displayGenome(genome)
 		cell = {}
 		cell.x = 220
 		cell.y = 30 + 8 * o
-		cell.value = network.neurons[config.NeatConfig.MaxNodes + o].value
-		cells[config.NeatConfig.MaxNodes+o] = cell
+		cell.value = network.neurons[cnfg.NeatConfig.MaxNodes + o].value
+		cells[cnfg.NeatConfig.MaxNodes+o] = cell
 		
 		local color
 		if cell.value > 0 then
@@ -947,12 +554,12 @@ function displayGenome(genome)
 			color = 0xFF000000
 		end
 		
-		forms.drawText(netPicture, 263, 24+8*o, config.ButtonNames[o], color, 9)
+		forms.drawText(netPicture, 263, 24+8*o, cnfg.ButtonNames[o], color, 9)
 	end
 	
 	for n,neuron in pairs(network.neurons) do
 		cell = {}
-		if n > Inputs and n <= config.NeatConfig.MaxNodes then
+		if n > Inputs and n <= cnfg.NeatConfig.MaxNodes then
 			cell.x = 140
 			cell.y = 40
 			cell.value = neuron.value
@@ -966,38 +573,22 @@ function displayGenome(genome)
 				local c1 = cells[gene.into]
 				local c2 = cells[gene.out]
 				
-				if gene.into > Inputs and gene.into <= config.NeatConfig.MaxNodes then
+				if gene.into > Inputs and gene.into <= cnfg.NeatConfig.MaxNodes then
 					c1.x = 0.75*c1.x + 0.25*c2.x
 					
-					if c1.x >= c2.x then
-						c1.x = c1.x - 40
-					end
-					
-					if c1.x < 90 then
-						c1.x = 90
-					end
-					
-					if c1.x > 220 then
-						c1.x = 220
-					end
+					if c1.x >= c2.x then c1.x = c1.x - 40 end
+					if c1.x < 90 then c1.x = 90 end
+					if c1.x > 220 then c1.x = 220 end
 					
 					c1.y = 0.75*c1.y + 0.25*c2.y
 				end
 				
-				if gene.out > Inputs and gene.out <= config.NeatConfig.MaxNodes then
+				if gene.out > Inputs and gene.out <= cnfg.NeatConfig.MaxNodes then
 					c2.x = 0.25*c1.x + 0.75*c2.x
 					
-					if c1.x >= c2.x then
-						c2.x = c2.x + 40
-					end
-					
-					if c2.x < 90 then
-						c2.x = 90
-					end
-					
-					if c2.x > 220 then
-						c2.x = 220
-					end
+					if c1.x >= c2.x then c2.x = c2.x + 40 end
+					if c2.x < 90 then c2.x = 90 end
+					if c2.x > 220 then c2.x = 220 end
 					
 					c2.y = 0.25*c1.y + 0.75*c2.y
 				end
@@ -1005,7 +596,7 @@ function displayGenome(genome)
 		end
 	end
 	
-	forms.drawBox(netPicture, 50-config.BoxRadius*5-3,70-config.BoxRadius*5-3,50+config.BoxRadius*5+2,70+config.BoxRadius*5+2,0xFF000000, 0x80808080)
+	forms.drawBox(netPicture, 50-cnfg.BoxRadius*5-3,70-cnfg.BoxRadius*5-3,50+cnfg.BoxRadius*5+2,70+cnfg.BoxRadius*5+2,0xFF000000, 0x80808080)
 	
 	for n,cell in pairs(cells) do
 		if n > Inputs or cell.value ~= 0 then
@@ -1029,7 +620,7 @@ function displayGenome(genome)
 			local opacity = 0xA0000000
 			if c1.value == 0 then opacity = 0x20000000 end
 			
-			local color = 0x80-math.floor(math.abs(mathFunctions.sigmoid(gene.weight))*0x80)
+			local color = 0x80-math.floor(math.abs(mf.sigmoid(gene.weight))*0x80)
 			if gene.weight > 0 then 
 				color = opacity + 0x8000 + 0x10000*color
 			else
@@ -1052,14 +643,121 @@ function displayGenome(genome)
 	forms.refresh(netPicture)
 end
 
+
+--##########################################################
+-- File Management
+--##########################################################
+
+ff.writeFile("temp.pool", pool)
+
+-- divide and conquer?
+function loadFile(filename)
+	print("Loading pool from " .. filename)
+    local file = io.open(filename, "r")
+    pool = nf.newPool()
+    pool.generation = file:read("*number")
+    pool.maxFitness = file:read("*number")
+    forms.settext(MaxLabel, "Max Fitness: " .. math.floor(pool.maxFitness))
+	
+    local numSpecies = file:read("*number")
+    for s=1,numSpecies do
+        local species = nf.newSpecies()
+        table.insert(pool.species, species)
+        species.topFitness = file:read("*number")
+        species.staleness = file:read("*number")
+		
+        local numGenomes = file:read("*number")
+        for g=1,numGenomes do
+            local genome = nf.newGenome()
+            table.insert(species.genomes, genome)
+            genome.fitness = file:read("*number")
+            genome.maxneuron = file:read("*number")
+			
+            local line = file:read("*line")
+            while line ~= "done" do
+                genome.mutationRates[line] = file:read("*number")
+                line = file:read("*line")
+            end
+			
+            local numGenes = file:read("*number")
+            for n=1,numGenes do
+                local gene = nf.newGene()
+                local enabled				
+				local geneStr = file:read("*line")
+				
+				local geneArr = ff.splitGeneStr(geneStr)
+				gene.into = tonumber(geneArr[1])
+				gene.out = tonumber(geneArr[2])
+				gene.weight = tonumber(geneArr[3])
+				gene.innovation = tonumber(geneArr[4])
+				enabled = tonumber(geneArr[5])
+				
+                if enabled == 0 then
+                    gene.enabled = false
+                else
+                    gene.enabled = true
+                end
+				
+				table.insert(genome.genes, gene)
+            end
+        end
+    end
+    file:close()   
+    
+    while nf.fitnessAlreadyMeasured() do
+        nextGenome()
+    end
+	
+    initializeRun()
+    pool.currentFrame = pool.currentFrame + 1
+	print("Pool loaded.")
+end
+
+-- switch?
 function flipState()
-	if config.Running == true then
-		config.Running = false
+	if cnfg.Running == true then
+		cnfg.Running = false
 		forms.settext(startButton, "Start")
 	else
-		config.Running = true
+		cnfg.Running = true
 		forms.settext(startButton, "Stop")
 	end
+end
+
+function savePool()
+	local filename = forms.gettext(saveLoadFile)
+	print(filename)
+	ff.writeFile(filename, pool)
+end
+
+function loadPool()
+	filename = forms.openfile("default.State.pool")
+	forms.settext(saveLoadFile, filename)
+	ff.loadFile(filename)
+end
+
+-- optimize x = x + 1?
+function playTop()
+	local maxfitness = 0
+	local maxs, maxg
+	
+	for s,species in pairs(pool.species) do
+		for g,genome in pairs(species.genomes) do
+			if genome.fitness > maxfitness then
+				maxfitness = genome.fitness
+				maxs = s
+				maxg = g
+			end
+		end
+	end
+	
+	pool.currentSpecies = maxs
+	pool.currentGenome = maxg
+	pool.maxFitness = maxfitness
+	forms.settext(MaxLabel, "Max Fitness: " .. math.floor(pool.maxFitness))
+	initializeRun()
+	pool.currentFrame = pool.currentFrame + 1
+	return
 end
 
 function onExit()
@@ -1087,131 +785,149 @@ saveButton = forms.button(form, "Save", savePool, 5, 102)
 loadButton = forms.button(form, "Load", loadPool, 80, 102)
 playTopButton = forms.button(form, "Play Top", playTop, 230, 102)
 
-saveLoadFile = forms.textbox(form, config.NeatConfig.Filename .. ".pool", 170, 25, nil, 5, 148)
+saveLoadFile = forms.textbox(form, cnfg.NeatConfig.Filename .. ".pool", 170, 25, nil, 5, 148)
 saveLoadLabel = forms.label(form, "Save/Load:", 5, 129)
-spritelist.InitSpriteList()
-spritelist.InitExtSpriteList()
+
+sl.InitSpriteList()
+sl.InitExtSpriteList()
 
 
 --##########################################################
 -- Reinforcement Learning
 --##########################################################
 
+-- optimize 'x = x + 1'
 while true do	
-	if config.Running == true then
-
-	local species = pool.species[pool.currentSpecies]
-	local genome = species.genomes[pool.currentGenome]
-	
-	displayGenome(genome)
-	
-	if pool.currentFrame%5 == 0 then
-		evaluateCurrent()
-	end
-
-	joypad.set(controller)
-
-	game.getPositions()
-	if samusX > rightmost then
-		rightmost = samusX
-		timeout = config.NeatConfig.TimeoutConstant
-	end
-	
-	local hitTimer = game.getSamusHitTimer()
-	if checkSamusCollision == true then
-		if hitTimer > 0 then
-			samusHitCounter = samusHitCounter + 1
-			console.writeline("Samus took damage, hit counter: " .. samusHitCounter)
-			checkSamusCollision = false
-		end
-	end
-	
-	if hitTimer == 0 then
-		checkSamusCollision = true
-	end
-	
-	Health = game.getHealth()
-
-	timeout = timeout - 1
-	
-	local timeoutBonus = pool.currentFrame / 4
-	if timeout + timeoutBonus <= 0 then
-		local missiles = game.getMissiles() - startMissiles
-		local superMissiles = game.getSuperMissiles() - startSuperMissiles
-		local bombs = game.getBombs() - startBombs
-		local tanks = game.getTanks() - startTanks
+	if cnfg.Running == true then
+		local species = pool.species[pool.currentSpecies]
+		local genome = species.genomes[pool.currentGenome]
 		
-		-- quickfix: too much info slows training down
-		--console.writeline("Missiles: " .. missiles .. " Super Missiles: " .. superMissiles .. " Power Bombs: " .. bombs .. " Energy Tanks: " .. tanks)
-
-		local pickupFitness = (missiles * 10) + (superMissiles * 100) + (bombs * 100) + (tanks * 1000)
-		if (missiles + superMissiles + bombs + tanks) > 0 then 
-			console.writeline("Collected Pickups added " .. pickupFitness .. " fitness")
-		end
+		-- update visual interface
+		displayGenome(genome)
 		
-		local hitPenalty = samusHitCounter * 100
-	
-		local fitness = pickupFitness - hitPenalty + rightmost - pool.currentFrame / 2
-
-		if startHealth < Health then
-			local ExtraHealthBonus = (Health - startHealth)*1000
-			fitness = fitness + ExtraHealthBonus
-			console.writeline("Extra Health added " .. ExtraHealthBonus .. " fitness")
+		-- evaluate actions every 5th frame
+		if pool.currentFrame%5 == 0 then
+			evaluateCurrent()
 		end
 
-		if rightmost > 4816 then
-			fitness = fitness + 10000
-			console.writeline("!!!!!!Reached Ridley!!!!!!!")
-		end
-		if fitness == 0 then
-			fitness = -1
-		end
-		genome.fitness = fitness
-		
-		if fitness > pool.maxFitness then
-			pool.maxFitness = fitness
-			writeFile(forms.gettext(saveLoadFile) .. ".gen" .. pool.generation .. ".pool")
-		end
-		
-		console.writeline("Gen " .. pool.generation .. " species " .. pool.currentSpecies .. " genome " .. pool.currentGenome .. " fitness: " .. fitness)
-		pool.currentSpecies = 1
-		pool.currentGenome = 1
-		while fitnessAlreadyMeasured() do
-			nextGenome()
-		end
-		initializeRun()
-	end
+		-- set next action
+		joypad.set(controller)
 
-	local measured = 0
-	local total = 0
-	for _,species in pairs(pool.species) do
-		for _,genome in pairs(species.genomes) do
-			total = total + 1
-			if genome.fitness ~= 0 then
-				measured = measured + 1
+		-- calculate exploration fitness / manage timeout
+		game.getPositions()
+		if samusX ~= samusXprev or samusY ~= samusYprev then
+			diffX = samusX - samusXprev
+			if diffX < 0 then diffX = diffX * -1 end
+
+			diffY = samusY - samusYprev
+			if diffY < 0 then diffY = diffY * -1 end
+
+			explorationFitness = explorationFitness + diffX + diffY
+			timout = cnfg.NeatConfig.TimeoutConstant
+		else
+			timeout = timeout - 1
+		end
+		samusXprev = samusX
+		samusYprev = samusY
+
+		-- check for hits
+		local hitTimer = game.getSamusHitTimer()
+		if checkSamusCollision == true then
+			if hitTimer > 0 then
+				samusHitCounter = samusHitCounter + 1
+				console.writeline("Samus took damage, hit counter: " .. samusHitCounter)
+				checkSamusCollision = false
 			end
 		end
-	end
-	
-	gui.drawEllipse(game.screenX-84, game.screenY-84, 192, 192, 0x50000000) 
-	forms.settext(FitnessLabel, "Fitness: " .. math.floor(rightmost - (pool.currentFrame) / 2 - (timeout + timeoutBonus)*2/3))
-	forms.settext(GenerationLabel, "Generation: " .. pool.generation)
-	forms.settext(SpeciesLabel, "Species: " .. pool.currentSpecies)
-	forms.settext(GenomeLabel, "Genome: " .. pool.currentGenome)
-	forms.settext(MaxLabel, "Max: " .. math.floor(pool.maxFitness))
-	forms.settext(MeasuredLabel, "Measured: " .. math.floor(measured/total*100) .. "%")
-	forms.settext(HealthLabel, "Health: " .. Health)
-	forms.settext(MissilesLabel, "Missiles: " .. (game.getMissiles() - startMissiles))
-	forms.settext(SuperMissilesLabel, "Super Missiles: " .. (game.getSuperMissiles() - startSuperMissiles))
-	
-	-- quickfix: remove bombs & tanks label because of invalid argument exception (too little space?)
-	--forms.settext(BombsLabel, "Power Bombs: " .. (game.getBombs() - startBombs))
-	--forms.settext(TanksLabel, "Reserve Tanks: " .. (game.getTanks() - startTanks))
-	
-	forms.settext(DmgLabel, "Damage: " .. samusHitCounter)
+		if hitTimer == 0 then checkSamusCollision = true end
+		
+		-- react to timeout
+		local timeoutBonus = pool.currentFrame / 4
+		if timeout + timeoutBonus <= 0 then
+			-- calculate pickupFitness
+			local missiles = game.getMissiles() - startMissiles
+			local superMissiles = game.getSuperMissiles() - startSuperMissiles
+			local bombs = game.getBombs() - startBombs
+			local tanks = game.getTanks() - startTanks
+			
+			local pickupFitness = (missiles * 10) + (superMissiles * 100) + (bombs * 100) + (tanks * 1000)
+			if (missiles + superMissiles + bombs + tanks) > 0 then 
+				console.writeline("Collected Pickups added " .. pickupFitness .. " fitness")
+			end
+			
+			-- calculate hitPenalty
+			local hitPenalty = samusHitCounter * 100
+		
+			-- calculate fitness
+			local fitness = explorationFitness + pickupFitness - hitPenalty - pool.currentFrame / 2
 
-	pool.currentFrame = pool.currentFrame + 1
-	
+			-- calculate extraHealthBonus
+			health = game.getHealth()
+			if startHealth < health then
+				local extraHealthBonus = (health - startHealth)*1000
+				fitness = fitness + extraHealthBonus
+				console.writeline("Extra Health added " .. extraHealthBonus .. " fitness")
+			end
+
+			-- give exploration bonus when reaching Ridley
+			if explorationFitness > 5000 then
+				fitness = fitness + 10000
+				console.writeline("!!!!!!Reached Ridley!!!!!!!")
+			end
+			if fitness == 0 then
+				fitness = -1
+			end
+			genome.fitness = fitness
+			
+			-- save best fitness
+			if fitness > pool.maxFitness then
+				pool.maxFitness = fitness
+				ff.writeFile(forms.gettext(saveLoadFile) .. ".gen" .. pool.generation .. ".pool", pool)
+			end
+			
+			-- final report, pool update, next genome 
+			console.writeline("Gen " .. pool.generation .. " species " .. pool.currentSpecies .. " genome " .. pool.currentGenome .. " fitness: " .. fitness)
+			pool.currentSpecies = 1
+			pool.currentGenome = 1
+			while nf.fitnessAlreadyMeasured(pool) do
+				nextGenome()
+			end
+
+			-- after fitness is measured, start next generation
+			initializeRun()
+		end
+
+		-- keep track of measured species
+		local measured = 0
+		local total = 0
+		for _,species in pairs(pool.species) do
+			for _,genome in pairs(species.genomes) do
+				total = total + 1
+				if genome.fitness ~= 0 then
+					measured = measured + 1
+				end
+			end
+		end
+		
+		-- update interface
+		gui.drawEllipse(game.screenX-84, game.screenY-84, 192, 192, 0x50000000) 
+		forms.settext(FitnessLabel, "Fitness: " .. math.floor(explorationFitness - (pool.currentFrame) / 2 - (timeout + timeoutBonus)*2/3))
+		forms.settext(GenerationLabel, "Generation: " .. pool.generation)
+		forms.settext(SpeciesLabel, "Species: " .. pool.currentSpecies)
+		forms.settext(GenomeLabel, "Genome: " .. pool.currentGenome)
+		forms.settext(MaxLabel, "Max: " .. math.floor(pool.maxFitness))
+		forms.settext(MeasuredLabel, "Measured: " .. math.floor(measured/total*100) .. "%")
+		forms.settext(HealthLabel, "Health: " .. health)
+		forms.settext(MissilesLabel, "Missiles: " .. (game.getMissiles() - startMissiles))
+		forms.settext(SuperMissilesLabel, "Super Missiles: " .. (game.getSuperMissiles() - startSuperMissiles))
+		
+		-- quickfix: remove bombs & tanks label because of invalid argument exception (too little space?)
+		--forms.settext(BombsLabel, "Power Bombs: " .. (game.getBombs() - startBombs))
+		--forms.settext(TanksLabel, "Reserve Tanks: " .. (game.getTanks() - startTanks))
+		
+		forms.settext(DmgLabel, "Damage: " .. samusHitCounter)
+
+		pool.currentFrame = pool.currentFrame + 1
 	end
 	emu.frameadvance();
 end
