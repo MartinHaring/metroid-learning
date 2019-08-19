@@ -1,13 +1,11 @@
 local _M = {}
 
 _M.BizhawkDir = "C:/bizhawk/"
-
--- For future organizational purposes
--- _M.StateDir = _M.BizhawkDir .. "Lua/SNES/metroid-learning/state/"
--- _M.PoolDir = _M.BizhawkDir .. "Lua/SNES/metroid-learning/pool/"
+_M.StateDir = _M.BizhawkDir .. "Lua/SNES/metroid-learning/state/"
+_M.PoolDir = _M.BizhawkDir .. "Lua/SNES/metroid-learning/pool/"
+_M.Filename = "default.State"
 
 _M.NeatConfig = {
-	Filename = "default.State",
 	Population = 300,
 	DeltaDisjoint = 2.0,
 	DeltaWeights = 0.4,
@@ -23,7 +21,7 @@ _M.NeatConfig = {
 	DisableMutationChance = 0.4,
 	EnableMutationChance = 0.2,
 	TimeoutConstant = 30,
-	MaxNodes = 1000000
+	MaxNodes = 100000
 }
 
 _M.ButtonNames = {
@@ -43,6 +41,5 @@ _M.BoxRadius = 6
 _M.InputSize = (_M.BoxRadius*2+1)*(_M.BoxRadius*2+1)
 
 _M.Running = false
-
 
 return _M

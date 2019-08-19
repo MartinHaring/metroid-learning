@@ -1,4 +1,3 @@
--- redundant?
 cnfg = require "config"
 
 local _M = {}
@@ -14,6 +13,23 @@ function _M.newPool()
 	pool.maxFitness = 0
 	
 	return pool
+end
+
+function _M.newSpecies()
+	local species = {}
+	species.topFitness = 0
+	species.staleness = 0
+	species.averageFitness = 0
+	species.genomes = {}
+	
+	return species
+end
+
+function _M.sameSpecies(genome1, genome2)
+	local dd = cnfg.NeatConfig.DeltaDisjoint * _M.disjoint(genome1.genes, genome2.genes)
+	local dw = cnfg.NeatConfig.DeltaWeights * _M.weights(genome1.genes, genome2.genes)
+	
+	return dd + dw < cnfg.NeatConfig.DeltaThreshold
 end
 
 function _M.newGenome()
@@ -37,40 +53,6 @@ function _M.newGenome()
 	return genome
 end
 
-function _M.randomNeuron(genes, nonInput)
-	local neurons = {}
-	
-	if not nonInput then
-		for i=1,Inputs do
-			neurons[i] = true
-		end
-	end
-	
-	for o=1,Outputs do
-		neurons[cnfg.NeatConfig.MaxNodes+o] = true
-	end
-	
-	for i=1,#genes do
-		if (not nonInput) or genes[i].into > Inputs then neurons[genes[i].into] = true end
-		if (not nonInput) or genes[i].out > Inputs then neurons[genes[i].out] = true end
-	end
-
-	local count = 0
-	for _,_ in pairs(neurons) do
-		count = count + 1
-	end
-	
-	local n = math.random(1, count)
-	for k,v in pairs(neurons) do
-		n = n-1
-		if n == 0 then
-			return k
-		end
-	end
-	
-	return 0
-end
-
 function _M.newGene()
 	local gene = {}
 	gene.into = 0
@@ -82,17 +64,58 @@ function _M.newGene()
 	return gene
 end
 
+function _M.copyGene(gene)
+	local gene2 = _M.newGene()
+	gene2.into = gene.into
+	gene2.out = gene.out
+	gene2.weight = gene.weight
+	gene2.enabled = gene.enabled
+	gene2.innovation = gene.innovation
+	
+	return gene2
+end
+
 function _M.containsLink(genes, link)
 	for i=1,#genes do
 		local gene = genes[i]
-		
-		if gene.into == link.into and gene.out == link.out then
-			return true
-		end
+		if gene.into == link.into and gene.out == link.out then return true end
 	end
 end
 
--- listfunction instead of for loop?
+function _M.newNeuron()
+	local neuron = {}
+	neuron.incoming = {}
+	neuron.value = 0.0
+	
+	return neuron
+end
+
+function _M.randomNeuron(genes, nonInput)
+	local neurons = {}
+	
+	if not nonInput then 
+		for i=1,Inputs do neurons[i] = true	end
+	end
+	
+	for o=1,Outputs do neurons[cnfg.NeatConfig.MaxNodes + o] = true end
+	
+	for i=1,#genes do
+		if (not nonInput) or genes[i].into > Inputs then neurons[genes[i].into] = true end
+		if (not nonInput) or genes[i].out > Inputs then neurons[genes[i].out] = true end
+	end
+
+	local count = 0
+	for _,_ in pairs(neurons) do count = count + 1 	end
+	
+	local n = math.random(1, count)
+	for k,v in pairs(neurons) do
+		n = n-1
+		if n == 0 then return k end
+	end
+	
+	return 0
+end
+
 function _M.pointMutate(genome)
 	local step = genome.mutationRates["step"]
 	
@@ -108,28 +131,6 @@ function _M.pointMutate(genome)
     return genome
 end
 
-function _M.copyGene(gene)
-	local gene2 = _M.newGene()
-	gene2.into = gene.into
-	gene2.out = gene.out
-	gene2.weight = gene.weight
-	gene2.enabled = gene.enabled
-	gene2.innovation = gene.innovation
-	
-	return gene2
-end
-
-function _M.newSpecies()
-	local species = {}
-	species.topFitness = 0
-	species.staleness = 0
-	species.averageFitness = 0
-	species.genomes = {}
-	
-	return species
-end
-
--- listfunction instead of for loop?
 function _M.disjoint(genes1, genes2)
 	local i1 = {}
 	for i = 1,#genes1 do
@@ -146,16 +147,12 @@ function _M.disjoint(genes1, genes2)
 	local disjointGenes = 0
 	for i = 1,#genes1 do
 		local gene = genes1[i]
-		if not i2[gene.innovation] then
-			disjointGenes = disjointGenes+1
-		end
+		if not i2[gene.innovation] then disjointGenes = disjointGenes + 1 end
 	end
 	
 	for i = 1,#genes2 do
 		local gene = genes2[i]
-		if not i1[gene.innovation] then
-			disjointGenes = disjointGenes+1
-		end
+		if not i1[gene.innovation] then disjointGenes = disjointGenes + 1 end
 	end
 	
 	local n = math.max(#genes1, #genes2)
@@ -163,7 +160,6 @@ function _M.disjoint(genes1, genes2)
 	return disjointGenes / n
 end
 
--- listfunction instead of for loop?
 function _M.weights(genes1, genes2)
 	local i2 = {}
 	
@@ -185,21 +181,6 @@ function _M.weights(genes1, genes2)
 	end
 	
 	return sum / coincident
-end
-
-function _M.sameSpecies(genome1, genome2)
-	local dd = cnfg.NeatConfig.DeltaDisjoint * _M.disjoint(genome1.genes, genome2.genes)
-	local dw = cnfg.NeatConfig.DeltaWeights * _M.weights(genome1.genes, genome2.genes)
-	
-	return dd + dw < cnfg.NeatConfig.DeltaThreshold
-end
-
-function _M.newNeuron()
-	local neuron = {}
-	neuron.incoming = {}
-	neuron.value = 0.0
-	
-	return neuron
 end
 
 function _M.calculateAverageFitness(species)

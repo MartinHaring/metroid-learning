@@ -28,11 +28,7 @@ function _M.writeFile(filename, pool)
 				file:write(gene.weight .. " ")
 				file:write(gene.innovation .. " ")
 				
-				if(gene.enabled) then
-					file:write("1\n")
-				else
-					file:write("0\n")
-				end
+				if(gene.enabled) then file:write("1\n") else file:write("0\n") end
 			end
 		end
 	end
