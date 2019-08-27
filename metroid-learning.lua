@@ -1,6 +1,5 @@
 cnfg = require "config"
 game = require "game"
-sl = require "spritelist"
 mf = require "mathFunctions"
 ff = require "fileFunctions"
 nf = require "neatFunctions"
@@ -200,17 +199,6 @@ function evaluateCurrent()
 	local inputDeltas = {}
 	inputs, inputDeltas = game.getInputs()
 	controller = evaluateNetwork(genome.network, inputs, inputDeltas)
-	
-	if controller["P1 Left"] and controller["P1 Right"] then
-		controller["P1 Left"] = false
-		controller["P1 Right"] = false
-	end
-	
-	if controller["P1 Up"] and controller["P1 Down"] then
-		controller["P1 Up"] = false
-		controller["P1 Down"] = false
-	end
-
 	joypad.set(controller)
 end
 
@@ -230,8 +218,8 @@ function initializeRun()
 	checkSamusCollision = true
 	samusHitCounter = 0
 	explorationFitness = 0
-	samusXprev = 0
-	samusYprev = 0
+	samusXprev = nil
+	samusYprev = nil
 
 	if health == nil then health = 0 end
 
@@ -696,9 +684,6 @@ playTopButton = forms.button(form, "Play Top", playTop, 335, 170)
 saveLoadLabel = forms.label(form, "Save as:", 15, 210)
 saveLoadFile = forms.textbox(form, cnfg.Filename, 170, 25, nil, 15, 233)
 
-sl.InitSpriteList()
-sl.InitExtSpriteList()
-
 
 --##########################################################
 -- Reinforcement Learning
@@ -715,6 +700,9 @@ while true do
 
 		-- Algorithm
 		game.getPositions()
+		if samusXprev == nil then samusXprev = samusX end
+		if samusYprev == nil then samusYprev = samusY end
+
 		if samusX ~= samusXprev or samusY ~= samusYprev then
 			diffX = samusX - samusXprev
 			if diffX < 0 then diffX = diffX * -1 end
@@ -740,6 +728,14 @@ while true do
 		end
 		if hitTimer == 0 then checkSamusCollision = true end
 		
+		if pool.currentFrame > 300  and pool.currentFrame % (cnfg.NeatConfig.TimeoutConstant * 10) == 0 then
+			if samusX == samusXprev then 
+				explorationFitness = explorationFitness - 10000
+				console.writeline("Cheating detected, abort.")
+				timeout = -500 
+			end
+		end
+
 		local timeoutBonus = pool.currentFrame / 4
 		if timeout + timeoutBonus <= 0 then
 			local missiles = game.getMissiles() - startMissiles
@@ -754,16 +750,16 @@ while true do
 			
 			local hitPenalty = samusHitCounter * 100
 		
-			local fitness = explorationFitness + pickupFitness - hitPenalty - pool.currentFrame / 2
+			local fitness = explorationFitness + pickupFitness - hitPenalty
 
 			health = game.getHealth()
 			if startHealth < health then
-				local extraHealthBonus = (health - startHealth)*1000
+				local extraHealthBonus = (health - startHealth) * 1000
 				fitness = fitness + extraHealthBonus
 				console.writeline("Extra Health added " .. extraHealthBonus .. " fitness")
 			end
 
-			if explorationFitness > 10000 then
+			if explorationFitness > 20000 then
 				fitness = fitness + 10000
 				console.writeline("!!!!!!Reached Ridley!!!!!!!")
 			end

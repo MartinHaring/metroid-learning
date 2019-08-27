@@ -5,11 +5,7 @@ A student's project conducted at FH JOANNEUM Graz.
 This project brings Reinforcement Learning into Super Metroid.
 An AI tries to learn to beat the game.
 
-Currently a Work in Progress.
-Next steps:
-* Fixing the last script
-
-The core functionality already works. To try it out yourself, follow these steps:
+To try it out yourself, follow these steps:
 1. Make sure the bizhawk emulator is installed (currently only works if it's install directory is located on C:)
 2. Place this project in the Lua/SNES directory.
 3. Run emuhawk.exe and load the "Super Metroid (JU) [!].smc" rom
